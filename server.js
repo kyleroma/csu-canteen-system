@@ -9,6 +9,7 @@ app.use(express.json());
 
 // routes
 app.use("/api/auth", require("./routes/authRoutes"));
+app.use("/api/orders", require("./routes/orderRoutes"));
 
 // health check — proves the server is alive
 app.get("/api/health", (req, res) => {
