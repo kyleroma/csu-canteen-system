@@ -10,6 +10,10 @@ app.use(express.json());
 // routes
 app.use("/api/auth", require("./routes/authRoutes"));
 app.use("/api/orders", require("./routes/orderRoutes"));
+app.use("/api/vendor/menu", require("./routes/menuRoutes"));
+app.use("/api/vendor/orders", require("./routes/vendorOrderRoutes"));
+app.use("/api/browse", require("./routes/browseRoutes"));
+app.use("/api/admin", require("./routes/adminRoutes"));
 
 // health check — proves the server is alive
 app.get("/api/health", (req, res) => {

@@ -9,18 +9,17 @@ module.exports = (sequelize, DataTypes) => {
         primaryKey: true,
         autoIncrement: true,
       },
-      csu_email: {
+      email: {
         type: DataTypes.STRING,
         allowNull: false,
         unique: true,
         validate: {
           isEmail: { msg: "Must be a valid email address" },
-          isCsuEmail(value) {
-            if (!value.endsWith("@carsu.edu.ph")) {
-              throw new Error("Only @carsu.edu.ph email addresses are allowed");
-            }
-          },
         },
+      },
+      phone: {
+        type: DataTypes.STRING,
+        allowNull: true,
       },
       password_hash: {
         type: DataTypes.STRING,
@@ -41,6 +40,19 @@ module.exports = (sequelize, DataTypes) => {
       underscored: true,
       createdAt: "created_at",
       updatedAt: "updated_at",
+      validate: {
+        // Students must hold a CSU account. Vendors and admins may not.
+        studentsUseCsuEmail() {
+          if (
+            this.role === "STUDENT" &&
+            !String(this.email).endsWith("@carsu.edu.ph")
+          ) {
+            throw new Error(
+              "Students must register with a @carsu.edu.ph email address.",
+            );
+          }
+        },
+      },
     },
   );
 
@@ -48,5 +60,6 @@ module.exports = (sequelize, DataTypes) => {
     User.hasOne(models.Vendor, { foreignKey: "user_id" });
     User.hasMany(models.Order, { foreignKey: "student_id" });
   };
+
   return User;
 };

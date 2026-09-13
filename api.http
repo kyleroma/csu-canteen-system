@@ -1,0 +1,138 @@
+@baseUrl = http://localhost:5000
+@studentToken = eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VyX2lkIjo1LCJyb2xlIjoiU1RVREVOVCIsImVtYWlsIjoic3R1ZGVudDFAY2Fyc3UuZWR1LnBoIiwiaWF0IjoxNzg5MzI2NTI2LCJleHAiOjE3ODkzNTUzMjZ9.ElMN3qks83pBWAU93tDPFj5wcX_-4ohJzrk1PPqcP-g
+@vendorToken = eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VyX2lkIjo2LCJyb2xlIjoiVkVORE9SIiwiY3N1X2VtYWlsIjoidmVuZG9yMUBjYXJzdS5lZHUucGgiLCJpYXQiOjE3ODkyNzk2MjMsImV4cCI6MTc4OTMwODQyM30.1N4iLWQHj25iOs_DO9jTOOyeVejS0IKWJyg-hFAdOhE
+
+### Health check
+GET {{baseUrl}}/api/health
+
+### Login as student
+POST {{baseUrl}}/api/auth/login
+Content-Type: application/json
+
+{
+  "email": "student1@carsu.edu.ph",
+  "password": "password123"
+}
+
+### Login as vendor
+POST {{baseUrl}}/api/auth/login
+Content-Type: application/json
+
+{
+  "email": "vendor1@gmail.com",
+  "password": "password123"
+}
+
+### Register - should be rejected (Gmail)
+POST {{baseUrl}}/api/auth/register
+Content-Type: application/json
+
+{
+  "email": "outsider@gmail.com",
+  "password": "password123",
+  "full_name": "Outsider"
+}
+
+### Who am I
+GET {{baseUrl}}/api/auth/me
+Authorization: Bearer {{studentToken}}
+
+### VENDOR - list my menu
+GET {{baseUrl}}/api/vendor/menu
+Authorization: Bearer {{vendorToken}}
+
+### VENDOR - blocked for students (expect 403)
+GET {{baseUrl}}/api/vendor/menu
+Authorization: Bearer {{studentToken}}
+
+### VENDOR - add menu item
+POST {{baseUrl}}/api/vendor/menu
+Content-Type: application/json
+Authorization: Bearer {{vendorToken}}
+
+{
+  "name": "Matcha Latte",
+  "category": "Beverages",
+  "price": 65,
+  "stock_qty": 12
+}
+
+### VENDOR - toggle sold out (item 9)
+PATCH {{baseUrl}}/api/vendor/menu/9/sold-out
+Authorization: Bearer {{vendorToken}}
+
+### VENDOR - restock item 10
+PATCH {{baseUrl}}/api/vendor/menu/10
+Content-Type: application/json
+Authorization: Bearer {{vendorToken}}
+
+{
+  "stock_qty": 25
+}
+
+
+### STUDENT - place an order
+POST {{baseUrl}}/api/orders
+Content-Type: application/json
+Authorization: Bearer {{studentToken}}
+
+{
+  "slot_id": 6,
+  "items": [{ "item_id": 8, "quantity": 2 }]
+}
+
+### STUDENT - my orders
+GET {{baseUrl}}/api/orders/mine
+Authorization: Bearer {{studentToken}}
+
+### VENDOR - order queue (grouped by status)
+GET {{baseUrl}}/api/vendor/orders
+Authorization: Bearer {{vendorToken}}
+
+### VENDOR - only pending orders
+GET {{baseUrl}}/api/vendor/orders?status=PENDING
+Authorization: Bearer {{vendorToken}}
+
+### VENDOR - advance to PREPARING (change the id)
+PATCH {{baseUrl}}/api/vendor/orders/11/status
+Content-Type: application/json
+Authorization: Bearer {{vendorToken}}
+
+{
+  "status": "preparing"
+}
+
+### VENDOR - illegal jump, expect 409
+PATCH {{baseUrl}}/api/vendor/orders/11/status
+Content-Type: application/json
+Authorization: Bearer {{vendorToken}}
+
+{
+  "status": "CLAIMED"
+}
+
+### VENDOR - daily summary
+GET {{baseUrl}}/api/vendor/orders/summary
+Authorization: Bearer {{vendorToken}}
+
+### STUDENT - list stalls
+GET {{baseUrl}}/api/browse/stalls
+Authorization: Bearer {{studentToken}}
+
+### STUDENT - view a stall's menu (change the id)
+GET {{baseUrl}}/api/browse/stalls/3/menu
+Authorization: Bearer {{studentToken}}
+
+### STUDENT - view a stall's pickup slots
+GET {{baseUrl}}/api/browse/stalls/3/slots
+Authorization: Bearer {{studentToken}}
+
+### Rename a menu item / change price
+PATCH {{baseUrl}}/api/vendor/menu/8
+Content-Type: application/json
+Authorization: Bearer {{vendorToken}}
+
+{
+  "name": "Tapsilog Special",
+  "price": 70
+}

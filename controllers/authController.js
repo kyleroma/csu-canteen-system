@@ -5,9 +5,9 @@ const User = db.User;
 
 exports.register = async (req, res) => {
   try {
-    const { csu_email, password, full_name, role } = req.body;
+    const { email, password, full_name, role, phone } = req.body;
 
-    if (!csu_email || !password || !full_name) {
+    if (!email || !password || !full_name) {
       return res.status(400).json({
         message: "Email, password, and full name are required.",
       });
@@ -19,7 +19,7 @@ exports.register = async (req, res) => {
       });
     }
 
-    const existing = await User.findOne({ where: { csu_email } });
+    const existing = await User.findOne({ where: { email } });
     if (existing) {
       return res.status(409).json({
         message: "An account with this email already exists.",
@@ -29,7 +29,8 @@ exports.register = async (req, res) => {
     const password_hash = await bcrypt.hash(password, 10);
 
     const user = await User.create({
-      csu_email,
+      email,
+      phone: phone || null,
       password_hash,
       full_name,
       role: role || "STUDENT",
@@ -39,7 +40,8 @@ exports.register = async (req, res) => {
       message: "Account created successfully.",
       user: {
         user_id: user.user_id,
-        csu_email: user.csu_email,
+        email: user.email,
+        phone: user.phone,
         full_name: user.full_name,
         role: user.role,
       },
@@ -55,15 +57,15 @@ exports.register = async (req, res) => {
 
 exports.login = async (req, res) => {
   try {
-    const { csu_email, password } = req.body;
+    const { email, password } = req.body;
 
-    if (!csu_email || !password) {
+    if (!email || !password) {
       return res.status(400).json({
         message: "Email and password are required.",
       });
     }
 
-    const user = await User.findOne({ where: { csu_email } });
+    const user = await User.findOne({ where: { email } });
     if (!user) {
       return res.status(401).json({ message: "Invalid email or password." });
     }
@@ -74,11 +76,7 @@ exports.login = async (req, res) => {
     }
 
     const token = jwt.sign(
-      {
-        user_id: user.user_id,
-        role: user.role,
-        csu_email: user.csu_email,
-      },
+      { user_id: user.user_id, role: user.role, email: user.email },
       process.env.JWT_SECRET,
       { expiresIn: "8h" },
     );
@@ -88,7 +86,7 @@ exports.login = async (req, res) => {
       token,
       user: {
         user_id: user.user_id,
-        csu_email: user.csu_email,
+        email: user.email,
         full_name: user.full_name,
         role: user.role,
       },

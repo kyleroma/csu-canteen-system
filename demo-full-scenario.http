@@ -1,0 +1,388 @@
+###############################################################
+#  CSU CANTEEN PRE-ORDER SYSTEM — API REFERENCE
+#
+#  Click "Send Request" above any block to run it.
+#  Fill in the tokens below after running the login requests.
+#
+#  AUTH RULE (updated):
+#    STUDENT  → must use @carsu.edu.ph
+#    VENDOR   → any email (personal Gmail, etc.) + optional phone
+#    ADMIN    → any email
+###############################################################
+
+@baseUrl = http://localhost:5000
+
+@studentToken = eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VyX2lkIjo1LCJyb2xlIjoiU1RVREVOVCIsImVtYWlsIjoic3R1ZGVudDFAY2Fyc3UuZWR1LnBoIiwiaWF0IjoxNzg5MzI3NzIxLCJleHAiOjE3ODkzNTY1MjF9.Hm-9Re47U1Nk62jP5pprq4O2tNa4ZgqGZzFuVVxTCpI
+@vendorToken  = eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VyX2lkIjo2LCJyb2xlIjoiVkVORE9SIiwiZW1haWwiOiJ2ZW5kb3IxQGNhcnN1LmVkdS5waCIsImlhdCI6MTc4OTMyODAwNSwiZXhwIjoxNzg5MzU2ODA1fQ.eRHWGYqsgDzn5krRZYAZtCemqhAhoEYtPZClwOFIqn4
+@adminToken   = eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VyX2lkIjo3LCJyb2xlIjoiQURNSU4iLCJlbWFpbCI6ImFkbWluQGNhcnN1LmVkdS5waCIsImlhdCI6MTc4OTMyODA1NCwiZXhwIjoxNzg5MzU2ODU0fQ.pb_Y3qYEnpgoi8BBdQEt0fVaWCTjYlDAUtRryaJTrpA
+
+###############################################################
+#  HEALTH
+###############################################################
+
+### Health check
+GET {{baseUrl}}/api/health
+
+
+###############################################################
+#  AUTHENTICATION
+###############################################################
+
+### Login as student
+POST {{baseUrl}}/api/auth/login
+Content-Type: application/json
+
+{
+  "email": "student1@carsu.edu.ph",
+  "password": "password123"
+}
+
+### Login as vendor (original CSU-email vendor)
+POST {{baseUrl}}/api/auth/login
+Content-Type: application/json
+
+{
+  "email": "vendor1@carsu.edu.ph",
+  "password": "password123"
+}
+
+### Login as admin
+POST {{baseUrl}}/api/auth/login
+Content-Type: application/json
+
+{
+  "email": "admin@carsu.edu.ph",
+  "password": "password123"
+}
+
+### Register a STUDENT with a CSU email (expect 201)
+POST {{baseUrl}}/api/auth/register
+Content-Type: application/json
+
+{
+  "email": "newstudent@carsu.edu.ph",
+  "password": "password123",
+  "full_name": "New Student"
+}
+
+### Register a STUDENT with Gmail (expect 400 - rule enforced)
+POST {{baseUrl}}/api/auth/register
+Content-Type: application/json
+
+{
+  "email": "juan@gmail.com",
+  "password": "password123",
+  "full_name": "Juan Dela Cruz",
+  "role": "STUDENT"
+}
+
+### Register a VENDOR with a personal email (expect 201)
+# Vendors are not CSU students. Personal email + phone.
+POST {{baseUrl}}/api/auth/register
+Content-Type: application/json
+
+{
+  "email": "alingnena@gmail.com",
+  "password": "password123",
+  "full_name": "Aling Nena",
+  "role": "VENDOR",
+  "phone": "09171234567"
+}
+
+### Login as the Gmail vendor
+POST {{baseUrl}}/api/auth/login
+Content-Type: application/json
+
+{
+  "email": "alingnena@gmail.com",
+  "password": "password123"
+}
+
+### Duplicate email (expect 409)
+POST {{baseUrl}}/api/auth/register
+Content-Type: application/json
+
+{
+  "email": "student1@carsu.edu.ph",
+  "password": "password123",
+  "full_name": "Duplicate"
+}
+
+### Who am I - no token (expect 401)
+GET {{baseUrl}}/api/auth/me
+
+### Who am I - fake token (expect 401)
+GET {{baseUrl}}/api/auth/me
+Authorization: Bearer faketoken123
+
+### Who am I - valid token (expect 200)
+GET {{baseUrl}}/api/auth/me
+Authorization: Bearer {{studentToken}}
+
+
+###############################################################
+#  STUDENT — BROWSE
+###############################################################
+
+### List verified, open stalls
+GET {{baseUrl}}/api/browse/stalls
+Authorization: Bearer {{studentToken}}
+
+### View a stall's menu (change the id)
+# Each item carries "available" so the UI does not compute it.
+GET {{baseUrl}}/api/browse/stalls/5/menu
+Authorization: Bearer {{studentToken}}
+
+### View a stall's pickup slots (change the id)
+# Each slot reports "remaining" and "is_full".
+GET {{baseUrl}}/api/browse/stalls/5/slots
+Authorization: Bearer {{studentToken}}
+
+
+###############################################################
+#  STUDENT — ORDERS
+###############################################################
+
+### Place an order (change slot_id and item_id)
+POST {{baseUrl}}/api/orders
+Content-Type: application/json
+Authorization: Bearer {{studentToken}}
+
+{
+  "slot_id": 6,
+  "items": [
+    { "item_id": 8, "quantity": 2 }
+  ]
+}
+
+### Order a sold-out item (expect 409)
+POST {{baseUrl}}/api/orders
+Content-Type: application/json
+Authorization: Bearer {{studentToken}}
+
+{
+  "slot_id": 6,
+  "items": [
+    { "item_id": 11, "quantity": 1 }
+  ]
+}
+
+### Order into a full slot (expect 409)
+POST {{baseUrl}}/api/orders
+Content-Type: application/json
+Authorization: Bearer {{studentToken}}
+
+{
+  "slot_id": 7,
+  "items": [
+    { "item_id": 8, "quantity": 1 }
+  ]
+}
+
+### Order more than available (expect 409)
+POST {{baseUrl}}/api/orders
+Content-Type: application/json
+Authorization: Bearer {{studentToken}}
+
+{
+  "slot_id": 6,
+  "items": [
+    { "item_id": 9, "quantity": 999 }
+  ]
+}
+
+### My order history
+GET {{baseUrl}}/api/orders/mine
+Authorization: Bearer {{studentToken}}
+
+
+###############################################################
+#  VENDOR — MENU & STOCK
+###############################################################
+
+### List my menu
+GET {{baseUrl}}/api/vendor/menu
+Authorization: Bearer {{vendorToken}}
+
+### Student hitting a vendor route (expect 403)
+GET {{baseUrl}}/api/vendor/menu
+Authorization: Bearer {{studentToken}}
+
+### Add a menu item
+POST {{baseUrl}}/api/vendor/menu
+Content-Type: application/json
+Authorization: Bearer {{vendorToken}}
+
+{
+  "name": "Hotsilog",
+  "category": "Rice Meal",
+  "price": 55,
+  "stock_qty": 12
+}
+
+### Update an item - price and name (change the id)
+PATCH {{baseUrl}}/api/vendor/menu/8
+Content-Type: application/json
+Authorization: Bearer {{vendorToken}}
+
+{
+  "name": "Tapsilog Special",
+  "price": 70
+}
+
+### Restock an item (change the id)
+# Setting stock above 0 clears is_sold_out automatically.
+PATCH {{baseUrl}}/api/vendor/menu/10
+Content-Type: application/json
+Authorization: Bearer {{vendorToken}}
+
+{
+  "stock_qty": 25
+}
+
+### Toggle sold out (change the id)
+PATCH {{baseUrl}}/api/vendor/menu/9/sold-out
+Authorization: Bearer {{vendorToken}}
+
+
+###############################################################
+#  VENDOR — ORDER QUEUE
+###############################################################
+
+### Order queue grouped by status
+GET {{baseUrl}}/api/vendor/orders
+Authorization: Bearer {{vendorToken}}
+
+### Only PENDING orders
+GET {{baseUrl}}/api/vendor/orders?status=PENDING
+Authorization: Bearer {{vendorToken}}
+
+### Advance PENDING -> PREPARING (change the id)
+PATCH {{baseUrl}}/api/vendor/orders/5/status
+Content-Type: application/json
+Authorization: Bearer {{vendorToken}}
+
+{
+  "status": "PREPARING"
+}
+
+### Advance PREPARING -> READY (change the id)
+PATCH {{baseUrl}}/api/vendor/orders/5/status
+Content-Type: application/json
+Authorization: Bearer {{vendorToken}}
+
+{
+  "status": "READY"
+}
+
+### Advance READY -> CLAIMED (change the id)
+PATCH {{baseUrl}}/api/vendor/orders/5/status
+Content-Type: application/json
+Authorization: Bearer {{vendorToken}}
+
+{
+  "status": "CLAIMED"
+}
+
+### Illegal jump (expect 409 with "allowed" list)
+PATCH {{baseUrl}}/api/vendor/orders/5/status
+Content-Type: application/json
+Authorization: Bearer {{vendorToken}}
+
+{
+  "status": "CLAIMED"
+}
+
+### Daily summary
+GET {{baseUrl}}/api/vendor/orders/summary
+Authorization: Bearer {{vendorToken}}
+
+
+###############################################################
+#  ADMIN
+###############################################################
+
+### Platform overview
+GET {{baseUrl}}/api/admin/overview
+Authorization: Bearer {{adminToken}}
+
+### List all stalls with owner contact details
+GET {{baseUrl}}/api/admin/vendors
+Authorization: Bearer {{adminToken}}
+
+### Register a stall for a vendor account (change user_id)
+POST {{baseUrl}}/api/admin/vendors
+Content-Type: application/json
+Authorization: Bearer {{adminToken}}
+
+{
+  "user_id": 8,
+  "stall_name": "DEMO STALL - Aling Nena's Carinderia",
+  "location": "Main Canteen, Stall 5"
+}
+
+### Verify a stall - makes it visible to students (change the id)
+PATCH {{baseUrl}}/api/admin/vendors/4/verify
+Authorization: Bearer {{adminToken}}
+
+### Close a stall (change the id)
+PATCH {{baseUrl}}/api/admin/vendors/4/status
+Content-Type: application/json
+Authorization: Bearer {{adminToken}}
+
+{
+  "is_open": false
+}
+
+### Reopen a stall (change the id)
+PATCH {{baseUrl}}/api/admin/vendors/4/status
+Content-Type: application/json
+Authorization: Bearer {{adminToken}}
+
+{
+  "is_open": true
+}
+
+
+###############################################################
+#  CONCURRENCY TEST — run in Git Bash, not here
+#
+#  REST Client cannot fire two requests simultaneously.
+#  Substitute your token, slot id, and an item with stock = 1:
+#
+#  curl -s -X POST http://localhost:5000/api/orders \
+#    -H "Content-Type: application/json" \
+#    -H "Authorization: Bearer STUDENT_TOKEN" \
+#    -d '{"slot_id":6,"items":[{"item_id":10,"quantity":1}]}' &
+#  curl -s -X POST http://localhost:5000/api/orders \
+#    -H "Content-Type: application/json" \
+#    -H "Authorization: Bearer STUDENT_TOKEN" \
+#    -d '{"slot_id":6,"items":[{"item_id":10,"quantity":1}]}' &
+#  wait
+#
+#  EXPECT: exactly one success, one ITEM_SOLD_OUT.
+###############################################################
+
+
+###############################################################
+#  RESET DEMO DATA — run in pgAdmin Query Tool
+#
+#  DELETE FROM order_items;
+#  DELETE FROM orders;
+#  UPDATE menu_items SET stock_qty = 20, is_sold_out = false
+#      WHERE name = 'Tapsilog';
+#  UPDATE menu_items SET stock_qty = 15, is_sold_out = false
+#      WHERE name = 'Longsilog';
+#  UPDATE menu_items SET stock_qty = 1,  is_sold_out = false
+#      WHERE name = 'Chicken Adobo';
+#  UPDATE menu_items SET stock_qty = 0,  is_sold_out = true
+#      WHERE name = 'Iced Tea';
+#  UPDATE pickup_slots SET booked_count = 0  WHERE slot_id = 6;
+#  UPDATE pickup_slots SET booked_count = 10 WHERE slot_id = 7;
+#
+#  Check your ids:
+#  SELECT item_id, name, stock_qty, is_sold_out FROM menu_items;
+#  SELECT slot_id, capacity, booked_count FROM pickup_slots;
+#  SELECT vendor_id, stall_name, is_verified FROM vendors;
+#  SELECT user_id, email, role FROM users;
+###############################################################
