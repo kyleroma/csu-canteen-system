@@ -51,6 +51,8 @@ exports.myOrders = async (req, res) => {
     const orders = await db.Order.findAll({
       where: { student_id: req.user.user_id },
       include: [
+        { model: db.PickupSlot, attributes: ["start_time", "end_time"] },
+        { model: db.Vendor, attributes: ["stall_name", "location"] },
         {
           model: db.OrderItem,
           as: "items",

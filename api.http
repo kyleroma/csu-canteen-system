@@ -136,3 +136,15 @@ Authorization: Bearer {{vendorToken}}
   "name": "Tapsilog Special",
   "price": 70
 }
+
+### VENDOR - generate slots
+POST {{baseUrl}}/api/vendor/slots/generate
+Content-Type: application/json
+Authorization: Bearer {{vendorToken}}
+
+{
+  "open_time": "22:15",
+  "close_time": "23:45",
+  "interval_minutes": 15,
+  "capacity": 10
+}

@@ -12,8 +12,8 @@
 
 @baseUrl = http://localhost:5000
 
-@studentToken = eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VyX2lkIjo1LCJyb2xlIjoiU1RVREVOVCIsImVtYWlsIjoic3R1ZGVudDFAY2Fyc3UuZWR1LnBoIiwiaWF0IjoxNzg5MzI3NzIxLCJleHAiOjE3ODkzNTY1MjF9.Hm-9Re47U1Nk62jP5pprq4O2tNa4ZgqGZzFuVVxTCpI
-@vendorToken  = eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VyX2lkIjo2LCJyb2xlIjoiVkVORE9SIiwiZW1haWwiOiJ2ZW5kb3IxQGNhcnN1LmVkdS5waCIsImlhdCI6MTc4OTMyODAwNSwiZXhwIjoxNzg5MzU2ODA1fQ.eRHWGYqsgDzn5krRZYAZtCemqhAhoEYtPZClwOFIqn4
+@studentToken = eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VyX2lkIjo1LCJyb2xlIjoiU1RVREVOVCIsImVtYWlsIjoic3R1ZGVudDFAY2Fyc3UuZWR1LnBoIiwiaWF0IjoxNzg5MzcyMDAxLCJleHAiOjE3ODk0MDA4MDF9.dXDOYOB9Bn1XiIx6wJ247KV3f8DA6tlsA1MEhLWyIAs
+@vendorToken  = eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VyX2lkIjo5LCJyb2xlIjoiVkVORE9SIiwiZW1haWwiOiJkZW1vLnZlbmRvckBjYXJzdS5lZHUucGgiLCJpYXQiOjE3ODkzNzM0OTksImV4cCI6MTc4OTQwMjI5OX0.OuZhI7RnrFTBvbx8906oS4tUPAT2PxzPD8xU5KFTfcE
 @adminToken   = eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VyX2lkIjo3LCJyb2xlIjoiQURNSU4iLCJlbWFpbCI6ImFkbWluQGNhcnN1LmVkdS5waCIsImlhdCI6MTc4OTMyODA1NCwiZXhwIjoxNzg5MzU2ODU0fQ.pb_Y3qYEnpgoi8BBdQEt0fVaWCTjYlDAUtRryaJTrpA
 
 ###############################################################
@@ -42,7 +42,7 @@ POST {{baseUrl}}/api/auth/login
 Content-Type: application/json
 
 {
-  "email": "vendor1@carsu.edu.ph",
+  "email": "vendor@carsu.edu.ph",
   "password": "password123"
 }
 
@@ -82,11 +82,11 @@ POST {{baseUrl}}/api/auth/register
 Content-Type: application/json
 
 {
-  "email": "alingnena@gmail.com",
+  "email": "rihanna@gmail.com",
   "password": "password123",
-  "full_name": "Aling Nena",
+  "full_name": "rihanna",
   "role": "VENDOR",
-  "phone": "09171234567"
+  "phone": "09099704491"
 }
 
 ### Login as the Gmail vendor
@@ -94,7 +94,7 @@ POST {{baseUrl}}/api/auth/login
 Content-Type: application/json
 
 {
-  "email": "alingnena@gmail.com",
+  "email": "rihanna@gmail.com",
   "password": "password123"
 }
 
@@ -386,3 +386,53 @@ Authorization: Bearer {{adminToken}}
 #  SELECT vendor_id, stall_name, is_verified FROM vendors;
 #  SELECT user_id, email, role FROM users;
 ###############################################################
+
+### VENDOR - generate today's pickup slots
+POST {{baseUrl}}/api/vendor/slots/generate
+Content-Type: application/json
+Authorization: Bearer {{vendorToken}}
+
+{
+  "open_time": "10:00",
+  "close_time": "14:00",
+  "interval_minutes": 15,
+  "capacity": 10
+}
+
+### VENDOR - list my slots
+GET {{baseUrl}}/api/vendor/slots
+Authorization: Bearer {{vendorToken}}
+
+### VENDOR - change a slot's capacity (change the id)
+PATCH {{baseUrl}}/api/vendor/slots/1
+Content-Type: application/json
+Authorization: Bearer {{vendorToken}}
+
+{
+  "capacity": 20
+}
+
+### VENDOR - remove a slot (change the id)
+DELETE {{baseUrl}}/api/vendor/slots/1
+Authorization: Bearer {{vendorToken}}
+
+### Login as the stall owner
+POST {{baseUrl}}/api/auth/login
+Content-Type: application/json
+
+{
+  "email": "demo.vendor@carsu.edu.ph",
+  "password": "password123"
+}
+
+### VENDOR - generate slots
+POST {{baseUrl}}/api/vendor/slots/generate
+Content-Type: application/json
+Authorization: Bearer {{vendorToken}}
+
+{
+  "open_time": "22:15",
+  "close_time": "23:45",
+  "interval_minutes": 15,
+  "capacity": 10
+}
