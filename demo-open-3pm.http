@@ -1,0 +1,209 @@
+### ================================================================
+### CSU Canteen — Demo: open a stall and take orders until 3:00 PM
+### Save as: C:\canteen\server\demo-open-until-3pm.http
+###
+### Run blocks TOP TO BOTTOM with "Send Request".
+### Tokens are captured automatically (# @name). You only fill in
+### @stallId, @itemId, @slotId, @orderId by hand when told to.
+###
+### BEFORE YOU START
+###   1. Server running:  npm run dev   (in C:\canteen\server)
+###   2. Optional clean slate — pgAdmin Query Tool:
+###        DELETE FROM order_items;
+###        DELETE FROM orders;
+###        DELETE FROM pickup_slots;
+###        UPDATE menu_items SET stock_qty = 15, is_sold_out = false;
+###   3. Demo must run BEFORE 3:00 PM — past slots are hidden.
+### ================================================================
+
+@baseUrl = http://localhost:5000/api
+
+# Fill these in as you go (see each step)
+@stallId = 1
+@itemId  = 1
+@slotId  = 1
+@orderId = 1
+
+
+### ================================================================
+### PART A — ADMIN: verify and open the stall
+### ================================================================
+
+### A1. Admin login
+# @name adminLogin
+POST {{baseUrl}}/auth/login
+Content-Type: application/json
+
+{
+  "email": "admin@carsu.edu.ph",
+  "password": "password123"
+}
+
+### A2. List all stalls — copy the demo stall's vendor_id into @stallId above
+GET {{baseUrl}}/admin/stalls
+Authorization: Bearer {{adminLogin.response.body.token}}
+
+### A3. Verify the stall (unverified stalls are hidden from students)
+PATCH {{baseUrl}}/admin/stalls/{{stallId}}/verify
+Authorization: Bearer {{adminLogin.response.body.token}}
+Content-Type: application/json
+
+{
+  "is_verified": true
+}
+
+### A4. Open the stall
+PATCH {{baseUrl}}/admin/stalls/{{stallId}}/open
+Authorization: Bearer {{adminLogin.response.body.token}}
+Content-Type: application/json
+
+{
+  "is_open": true
+}
+
+### A5. Admin overview — confirm the stall is verified and open
+GET {{baseUrl}}/admin/overview
+Authorization: Bearer {{adminLogin.response.body.token}}
+
+
+### ================================================================
+### PART B — VENDOR: stock the menu and open pickup slots until 3 PM
+### ================================================================
+
+### B1. Vendor login
+# @name vendorLogin
+POST {{baseUrl}}/auth/login
+Content-Type: application/json
+
+{
+  "email": "demo.vendor@carsu.edu.ph",
+  "password": "password123"
+}
+
+### B2. View own menu — copy one item_id into @itemId above
+GET {{baseUrl}}/vendor/menu
+Authorization: Bearer {{vendorLogin.response.body.token}}
+
+### B3. Restock that item
+PATCH {{baseUrl}}/vendor/menu/{{itemId}}
+Authorization: Bearer {{vendorLogin.response.body.token}}
+Content-Type: application/json
+
+{
+  "stock_qty": 15,
+  "is_sold_out": false
+}
+
+### B4. Generate pickup slots: 7:00 AM to 3:00 PM, every 15 min, 20 orders each
+###     Slots already in the past are simply hidden from students.
+POST {{baseUrl}}/vendor/slots
+Authorization: Bearer {{vendorLogin.response.body.token}}
+Content-Type: application/json
+
+{
+  "open_time": "07:00",
+  "close_time": "15:00",
+  "interval_minutes": 15,
+  "capacity": 20
+}
+
+### B5. Confirm the slots exist
+GET {{baseUrl}}/vendor/slots
+Authorization: Bearer {{vendorLogin.response.body.token}}
+
+
+### ================================================================
+### PART C — STUDENT: browse, pick a slot, place an order
+### ================================================================
+
+### C1. Student login
+# @name studentLogin
+POST {{baseUrl}}/auth/login
+Content-Type: application/json
+
+{
+  "email": "student1@carsu.edu.ph",
+  "password": "password123"
+}
+
+### C2. Browse stalls — the stall opened in Part A must appear here
+GET {{baseUrl}}/browse/stalls
+Authorization: Bearer {{studentLogin.response.body.token}}
+
+### C3. View the stall's menu — check "available": true
+GET {{baseUrl}}/browse/stalls/{{stallId}}/menu
+Authorization: Bearer {{studentLogin.response.body.token}}
+
+### C4. View open slots — copy the first slot_id with "is_full": false into @slotId
+GET {{baseUrl}}/browse/stalls/{{stallId}}/slots
+Authorization: Bearer {{studentLogin.response.body.token}}
+
+### C5. Place the order (the row-locked transaction) — copy order_id into @orderId
+POST {{baseUrl}}/orders
+Authorization: Bearer {{studentLogin.response.body.token}}
+Content-Type: application/json
+
+{
+  "vendor_id": {{stallId}},
+  "slot_id": {{slotId}},
+  "items": [
+    { "item_id": {{itemId}}, "quantity": 2 }
+  ]
+}
+
+### C6. Student order history — status should be PENDING
+GET {{baseUrl}}/orders/mine
+Authorization: Bearer {{studentLogin.response.body.token}}
+
+
+### ================================================================
+### PART D — VENDOR: work the order through the queue
+### ================================================================
+
+### D1. Vendor queue — the new order appears under PENDING
+GET {{baseUrl}}/vendor/orders
+Authorization: Bearer {{vendorLogin.response.body.token}}
+
+### D2. PENDING -> PREPARING
+PATCH {{baseUrl}}/vendor/orders/{{orderId}}/status
+Authorization: Bearer {{vendorLogin.response.body.token}}
+Content-Type: application/json
+
+{
+  "status": "PREPARING"
+}
+
+### D3. ILLEGAL JUMP (expected 409) — PREPARING -> CLAIMED is refused by the server
+PATCH {{baseUrl}}/vendor/orders/{{orderId}}/status
+Authorization: Bearer {{vendorLogin.response.body.token}}
+Content-Type: application/json
+
+{
+  "status": "CLAIMED"
+}
+
+### D4. PREPARING -> READY
+PATCH {{baseUrl}}/vendor/orders/{{orderId}}/status
+Authorization: Bearer {{vendorLogin.response.body.token}}
+Content-Type: application/json
+
+{
+  "status": "READY"
+}
+
+### D5. Student checks — status should be READY
+GET {{baseUrl}}/orders/mine
+Authorization: Bearer {{studentLogin.response.body.token}}
+
+### D6. READY -> CLAIMED (student picked it up)
+PATCH {{baseUrl}}/vendor/orders/{{orderId}}/status
+Authorization: Bearer {{vendorLogin.response.body.token}}
+Content-Type: application/json
+
+{
+  "status": "CLAIMED"
+}
+
+### D7. Daily summary — count and revenue include the claimed order
+GET {{baseUrl}}/vendor/orders/summary
+Authorization: Bearer {{vendorLogin.response.body.token}}
