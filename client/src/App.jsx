@@ -10,6 +10,7 @@ import Checkout from "./pages/student/Checkout";
 import Orders from "./pages/student/Orders";
 import VendorDashboard from "./pages/vendor/Dashboard";
 import VendorMenu from "./pages/vendor/Menu";
+import VendorSlots from "./pages/vendor/Slots";
 
 export default function App() {
   return (
@@ -69,6 +70,15 @@ export default function App() {
             element={
               <ProtectedRoute allow={["VENDOR"]}>
                 <VendorMenu />
+              </ProtectedRoute>
+            }
+          />
+
+          <Route
+            path="/vendor/slots"
+            element={
+              <ProtectedRoute allow={["VENDOR"]}>
+                <VendorSlots />
               </ProtectedRoute>
             }
           />
