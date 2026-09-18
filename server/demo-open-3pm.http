@@ -207,3 +207,17 @@ Content-Type: application/json
 ### D7. Daily summary — count and revenue include the claimed order
 GET {{baseUrl}}/vendor/orders/summary
 Authorization: Bearer {{vendorLogin.response.body.token}}
+
+### Onboard a brand-new vendor account and stall in one call
+POST {{baseUrl}}/admin/vendors/onboard
+Authorization: Bearer {{adminLogin.response.body.token}}
+Content-Type: application/json
+
+{
+  "email": "tindahan@gmail.com",
+  "password": "password123",
+  "full_name": "Aling Tess",
+  "phone": "09171234567",
+  "stall_name": "Tess Lutong Bahay",
+  "stall_location": "Main Canteen, Stall 7"
+}
