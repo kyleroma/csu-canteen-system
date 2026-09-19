@@ -1,3 +1,46 @@
+/* Google Fonts must be imported before the Tailwind layers */
+@import url("https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,500;12..96,700;12..96,800&family=Be+Vietnam+Pro:wght@400;500;600;700&display=swap");
+
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
+
+@layer base {
+  html {
+    -webkit-text-size-adjust: 100%;
+  }
+
+  body {
+    @apply bg-rice-50 text-kape-900 font-sans antialiased;
+  }
+
+  h1,
+  h2,
+  h3 {
+    @apply font-display;
+  }
+
+  /* Prices line up in a column when the figures are the same width */
+  .tabular {
+    font-variant-numeric: tabular-nums;
+  }
+
+  /* Visible keyboard focus everywhere, not just where we remember it */
+  :focus-visible {
+    @apply outline-none ring-2 ring-ube-600 ring-offset-2 ring-offset-rice-50;
+  }
+}
+
+@layer components {
+  /* The cart bar reads as a receipt: a torn top edge and aligned figures */
+  .receipt-edge {
+    background-image: linear-gradient(
+      90deg,
+      theme("colors.rice.200") 0 6px,
+      transparent 6px 12px
+    );
+    background-size: 12px 2px;
+    background-repeat: repeat-x;
+    background-position: top left;
+  }
+}
