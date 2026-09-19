@@ -1,8 +1,13 @@
 import axios from "axios";
 
-const api = axios.create({
-  baseURL: `http://${window.location.hostname}:5000/api`,
-});
+// In development the API is a separate process on port 5000, and we use the
+// page's hostname so a phone on the same wifi reaches the laptop, not itself.
+// In production Express serves this bundle, so the API is the same origin.
+const baseURL = import.meta.env.DEV
+  ? `http://${window.location.hostname}:5000/api`
+  : "/api";
+
+const api = axios.create({ baseURL });
 
 // Attach the JWT to every request automatically
 api.interceptors.request.use((config) => {

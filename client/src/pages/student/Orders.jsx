@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { useNavigate, useLocation } from "react-router-dom";
 import api from "../../api/client";
 import { useAuth } from "../../context/AuthContext";
@@ -13,7 +13,10 @@ const LABEL = {
   CANCELLED: "Cancelled",
 };
 
-function OrderCard({ order }) {
+function OrderCard({ order, confirming, onConfirm, onCancel, onDismiss }) {
+  const [busy, setBusy] = useState(false);
+  const [cancelError, setCancelError] = useState("");
+
   const stepIndex = STEPS.indexOf(order.status);
   const cancelled = order.status === "CANCELLED";
 
@@ -22,6 +25,14 @@ function OrderCard({ order }) {
       hour: "2-digit",
       minute: "2-digit",
     });
+
+  const confirmCancel = async () => {
+    setBusy(true);
+    setCancelError("");
+    const message = await onCancel(order);
+    if (message) setCancelError(message);
+    setBusy(false);
+  };
 
   return (
     <div className="bg-white rounded-xl border border-slate-200 p-4">
@@ -113,6 +124,48 @@ function OrderCard({ order }) {
           Your order is ready. Collect it at the stall.
         </p>
       )}
+
+      {cancelError && (
+        <p className="mt-3 text-sm text-red-600 bg-red-50 border border-red-200 rounded-lg px-3 py-2">
+          {cancelError}
+        </p>
+      )}
+
+      {/* Cancelling is only possible while the stall has not started cooking. */}
+      {order.status === "PENDING" && (
+        <div className="mt-4 border-t border-slate-100 pt-3">
+          {confirming ? (
+            <div className="flex flex-col sm:flex-row sm:items-center gap-2">
+              <p className="text-sm text-slate-600 sm:mr-auto">
+                Cancel this order? The stall will release your items.
+              </p>
+              <div className="flex gap-2">
+                <button
+                  onClick={confirmCancel}
+                  disabled={busy}
+                  className="text-sm font-medium text-white bg-red-600 hover:bg-red-700 disabled:opacity-50 rounded-lg px-4 py-2"
+                >
+                  {busy ? "Cancelling…" : "Yes, cancel"}
+                </button>
+                <button
+                  onClick={onDismiss}
+                  disabled={busy}
+                  className="text-sm font-medium text-slate-600 border border-slate-300 hover:bg-slate-50 rounded-lg px-4 py-2"
+                >
+                  Keep order
+                </button>
+              </div>
+            </div>
+          ) : (
+            <button
+              onClick={() => onConfirm(order.order_id)}
+              className="text-sm font-medium text-red-600 hover:underline"
+            >
+              Cancel order
+            </button>
+          )}
+        </div>
+      )}
     </div>
   );
 }
@@ -121,24 +174,46 @@ export default function Orders() {
   const [orders, setOrders] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
+  const [confirmingId, setConfirmingId] = useState(null);
 
   const navigate = useNavigate();
   const { state } = useLocation();
   const { logout } = useAuth();
 
-  useEffect(() => {
-    const load = () => {
-      api
-        .get("/orders/mine")
-        .then(({ data }) => setOrders(data.orders))
-        .catch(() => setError("Could not load your orders."))
-        .finally(() => setLoading(false));
-    };
+  const load = useCallback(() => {
+    return api
+      .get("/orders/mine")
+      .then(({ data }) => setOrders(data.orders))
+      .catch(() => setError("Could not load your orders."))
+      .finally(() => setLoading(false));
+  }, []);
 
+  useEffect(() => {
     load();
+    // Pause the poll while a confirm is open, so a refresh cannot
+    // pull the card out from under the student mid-decision.
+    if (confirmingId !== null) return;
     const timer = setInterval(load, 10000);
     return () => clearInterval(timer);
-  }, []);
+  }, [load, confirmingId]);
+
+  // Returns an error message to show on the card, or "" on success.
+  const cancelOrder = async (order) => {
+    try {
+      await api.patch(`/orders/${order.order_id}/cancel`);
+      setConfirmingId(null);
+      await load();
+      return "";
+    } catch (err) {
+      // 409 means the vendor moved the order on before the tap landed —
+      // reload so the student sees the real status, then explain why.
+      await load();
+      setConfirmingId(null);
+      return (
+        err.response?.data?.message || "Could not cancel this order. Try again."
+      );
+    }
+  };
 
   const active = orders.filter(
     (o) => o.status !== "CLAIMED" && o.status !== "CANCELLED",
@@ -146,6 +221,15 @@ export default function Orders() {
   const past = orders.filter(
     (o) => o.status === "CLAIMED" || o.status === "CANCELLED",
   );
+
+  const cardProps = (o) => ({
+    key: o.order_id,
+    order: o,
+    confirming: confirmingId === o.order_id,
+    onConfirm: setConfirmingId,
+    onCancel: cancelOrder,
+    onDismiss: () => setConfirmingId(null),
+  });
 
   return (
     <div className="min-h-screen bg-slate-50">
@@ -208,7 +292,7 @@ export default function Orders() {
             </h2>
             <div className="space-y-3">
               {active.map((o) => (
-                <OrderCard key={o.order_id} order={o} />
+                <OrderCard {...cardProps(o)} />
               ))}
             </div>
           </section>
@@ -221,7 +305,7 @@ export default function Orders() {
             </h2>
             <div className="space-y-3">
               {past.map((o) => (
-                <OrderCard key={o.order_id} order={o} />
+                <OrderCard {...cardProps(o)} />
               ))}
             </div>
           </section>
