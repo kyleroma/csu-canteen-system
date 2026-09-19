@@ -15,5 +15,11 @@ router.get(
   requireRole("STUDENT"),
   orderController.myOrders,
 );
+router.patch(
+  "/:id/cancel",
+  verifyToken,
+  requireRole("STUDENT"),
+  orderController.cancelOrder,
+);
 
 module.exports = router;

@@ -68,3 +68,39 @@ exports.myOrders = async (req, res) => {
     return res.status(500).json({ message: "Could not load orders." });
   }
 };
+
+exports.cancelOrder = async (req, res) => {
+  try {
+    const order = await orderService.cancelOrder(
+      req.user.user_id,
+      req.params.id,
+    );
+
+    return res.json({
+      message: "Order cancelled. The stock has been returned to the stall.",
+      order: {
+        order_id: order.order_id,
+        order_code: order.order_code,
+        status: order.status,
+      },
+    });
+  } catch (err) {
+    if (err.code === "ORDER_NOT_FOUND") {
+      return res.status(404).json({ message: err.message, code: err.code });
+    }
+
+    // Another student's order: 404, not 403 — a 403 would confirm the id exists.
+    if (err.code === "NOT_YOUR_ORDER") {
+      return res
+        .status(404)
+        .json({ message: "Order not found.", code: err.code });
+    }
+
+    if (["ALREADY_CANCELLED", "TOO_LATE_TO_CANCEL"].includes(err.code)) {
+      return res.status(409).json({ message: err.message, code: err.code });
+    }
+
+    console.error(err);
+    return res.status(500).json({ message: "Could not cancel the order." });
+  }
+};

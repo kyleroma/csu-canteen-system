@@ -101,3 +101,77 @@ exports.createOrder = async (studentId, slotId, cartItems) => {
     return order;
   });
 };
+
+// Cancelling is createOrder run backwards, and it needs the same protection:
+// stock returns, the slot frees a place, and the status changes together or
+// not at all. The order row is locked first so two taps on Cancel cannot
+// both pass the PENDING check and return the stock twice.
+exports.cancelOrder = async (studentId, orderId) => {
+  return await sequelize.transaction(async (t) => {
+    const order = await Order.findByPk(orderId, {
+      transaction: t,
+      lock: t.LOCK.UPDATE,
+    });
+
+    if (!order) {
+      const err = new Error("Order not found.");
+      err.code = "ORDER_NOT_FOUND";
+      throw err;
+    }
+
+    if (order.student_id !== studentId) {
+      const err = new Error("That order belongs to another student.");
+      err.code = "NOT_YOUR_ORDER";
+      throw err;
+    }
+
+    if (order.status === "CANCELLED") {
+      const err = new Error("This order is already cancelled.");
+      err.code = "ALREADY_CANCELLED";
+      throw err;
+    }
+
+    // Once the vendor starts cooking, the food is committed.
+    if (order.status !== "PENDING") {
+      const err = new Error(
+        "This order can no longer be cancelled — the stall has already started preparing it.",
+      );
+      err.code = "TOO_LATE_TO_CANCEL";
+      throw err;
+    }
+
+    const lines = await OrderItem.findAll({
+      where: { order_id: order.order_id },
+      transaction: t,
+    });
+
+    for (const line of lines) {
+      const item = await MenuItem.findByPk(line.item_id, {
+        transaction: t,
+        lock: t.LOCK.UPDATE,
+      });
+
+      // The item may have been deleted since; the rest of the cancel still stands.
+      if (!item) continue;
+
+      item.stock_qty += line.quantity;
+      if (item.stock_qty > 0) item.is_sold_out = false;
+      await item.save({ transaction: t });
+    }
+
+    const slot = await PickupSlot.findByPk(order.slot_id, {
+      transaction: t,
+      lock: t.LOCK.UPDATE,
+    });
+
+    if (slot && slot.booked_count > 0) {
+      slot.booked_count -= 1;
+      await slot.save({ transaction: t });
+    }
+
+    order.status = "CANCELLED";
+    await order.save({ transaction: t });
+
+    return order;
+  });
+};

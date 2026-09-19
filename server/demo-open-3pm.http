@@ -20,7 +20,7 @@
 
 # Fill these in as you go (see each step)
 @stallId = 1
-@itemId  = 1
+@itemId  = 21
 @slotId  = 1
 @orderId = 1
 
@@ -221,3 +221,7 @@ Content-Type: application/json
   "stall_name": "Tess Lutong Bahay",
   "stall_location": "Main Canteen, Stall 7"
 }
+
+### Cancel a PENDING order — stock returns, slot frees a place
+PATCH {{baseUrl}}/orders/{{orderId}}/cancel
+Authorization: Bearer {{studentLogin.response.body.token}}
