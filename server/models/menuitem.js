@@ -16,6 +16,8 @@ module.exports = (sequelize, DataTypes) => {
       stock_qty: { type: DataTypes.INTEGER, allowNull: false, defaultValue: 0 },
       is_sold_out: { type: DataTypes.BOOLEAN, defaultValue: false },
       is_active: { type: DataTypes.BOOLEAN, defaultValue: true },
+      // A link, not an uploaded file — see the migration for why
+      image_url: { type: DataTypes.STRING(500), allowNull: true },
     },
     {
       tableName: "menu_items",

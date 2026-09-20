@@ -31,7 +31,7 @@ exports.listMyMenu = async (req, res) => {
 exports.createItem = async (req, res) => {
   try {
     const vendor = await getMyVendor(req.user.user_id);
-    const { name, category, price, stock_qty } = req.body;
+    const { name, category, price, stock_qty, image_url } = req.body;
 
     if (!name || price === undefined) {
       return res.status(400).json({ message: "Name and price are required." });
@@ -47,6 +47,7 @@ exports.createItem = async (req, res) => {
       name,
       category: category || null,
       price,
+      image_url: image_url || null,
       stock_qty: qty,
       is_sold_out: qty === 0,
     });
@@ -74,13 +75,22 @@ exports.updateItem = async (req, res) => {
         .json({ message: "This item belongs to another stall." });
     }
 
-    const { name, category, price, stock_qty, is_sold_out, is_active } =
-      req.body;
+    const {
+      name,
+      category,
+      price,
+      stock_qty,
+      is_sold_out,
+      is_active,
+      image_url,
+    } = req.body;
 
     if (name !== undefined) item.name = name;
     if (category !== undefined) item.category = category;
     if (price !== undefined) item.price = price;
     if (is_active !== undefined) item.is_active = is_active;
+    // An empty string clears the photo, which is how a vendor removes one
+    if (image_url !== undefined) item.image_url = image_url || null;
 
     if (stock_qty !== undefined) {
       const qty = Number(stock_qty);

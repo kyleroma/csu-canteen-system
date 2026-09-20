@@ -3,7 +3,13 @@ import { useNavigate } from "react-router-dom";
 import api from "../../api/client";
 import { useAuth } from "../../context/AuthContext";
 
-const EMPTY = { name: "", category: "", price: "", stock_qty: "" };
+const EMPTY = {
+  name: "",
+  category: "",
+  price: "",
+  stock_qty: "",
+  image_url: "",
+};
 
 const inputClass =
   "w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500";
@@ -106,6 +112,7 @@ export default function VendorMenu() {
       name: item.name,
       category: item.category || "",
       price: String(item.price),
+      image_url: item.image_url || "",
       stock_qty: "",
     });
   };
@@ -122,6 +129,8 @@ export default function VendorMenu() {
         name: editForm.name.trim(),
         category: editForm.category.trim() || null,
         price,
+        // An empty box clears the photo
+        image_url: editForm.image_url.trim(),
       },
       "Item updated.",
     );
@@ -146,6 +155,7 @@ export default function VendorMenu() {
         name: newItem.name.trim(),
         category: newItem.category.trim() || null,
         price,
+        image_url: newItem.image_url.trim() || null,
         stock_qty: qty,
       });
       setItems((prev) => [...prev, data.item]);
@@ -291,6 +301,19 @@ export default function VendorMenu() {
                 placeholder="0"
               />
             </div>
+            <div className="sm:col-span-2">
+              <label className="text-xs text-slate-500">
+                Photo link (optional)
+              </label>
+              <input
+                className={inputClass}
+                value={newItem.image_url}
+                onChange={(e) =>
+                  setNewItem({ ...newItem, image_url: e.target.value })
+                }
+                placeholder="https://… paste a link to a photo of this dish"
+              />
+            </div>
             <div className="flex items-end">
               <button
                 type="submit"
@@ -361,6 +384,22 @@ export default function VendorMenu() {
                         }
                       />
                     </div>
+                    <div className="sm:col-span-3">
+                      <label className="text-xs text-slate-500">
+                        Photo link (optional)
+                      </label>
+                      <input
+                        className={inputClass}
+                        value={editForm.image_url}
+                        onChange={(e) =>
+                          setEditForm({
+                            ...editForm,
+                            image_url: e.target.value,
+                          })
+                        }
+                        placeholder="https://… leave empty to remove the photo"
+                      />
+                    </div>
                     <div className="sm:col-span-3 flex gap-2">
                       <button
                         onClick={() => saveEdit(item)}
@@ -379,14 +418,24 @@ export default function VendorMenu() {
                   </div>
                 ) : (
                   <div className="flex items-start justify-between gap-2">
-                    <div className="min-w-0">
-                      <p className="font-semibold text-slate-800">
-                        {item.name}
-                      </p>
-                      <p className="text-xs text-slate-500">
-                        {item.category || "Uncategorised"} · ₱
-                        {Number(item.price).toFixed(2)}
-                      </p>
+                    <div className="flex items-start gap-3 min-w-0">
+                      {item.image_url && (
+                        <img
+                          src={item.image_url}
+                          alt=""
+                          loading="lazy"
+                          className="w-12 h-12 rounded-lg object-cover bg-slate-100 shrink-0"
+                        />
+                      )}
+                      <div className="min-w-0">
+                        <p className="font-semibold text-slate-800">
+                          {item.name}
+                        </p>
+                        <p className="text-xs text-slate-500">
+                          {item.category || "Uncategorised"} · ₱
+                          {Number(item.price).toFixed(2)}
+                        </p>
+                      </div>
                     </div>
                     <div className="flex items-center gap-2 shrink-0">
                       {badge(item)}

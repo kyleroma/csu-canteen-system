@@ -33,6 +33,7 @@ exports.stallMenu = async (req, res) => {
         "price",
         "stock_qty",
         "is_sold_out",
+        "image_url",
       ],
       order: [
         ["category", "ASC"],
@@ -46,6 +47,7 @@ exports.stallMenu = async (req, res) => {
       name: i.name,
       category: i.category,
       price: i.price,
+      image_url: i.image_url,
       available: !i.is_sold_out && i.stock_qty > 0,
       stock_left: i.stock_qty,
     }));
