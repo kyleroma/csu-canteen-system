@@ -2,9 +2,8 @@ import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import api from "../../api/client";
 import { useAuth } from "../../context/AuthContext";
+import Footer from "../../components/Footer";
 
-// The first letter doubles as the stall's sign — canteen stalls are
-// recognised by their painted board long before you read the name.
 function StallMark({ name, muted }) {
   return (
     <div
@@ -37,7 +36,7 @@ export default function Stalls() {
   const closed = stalls.filter((s) => !s.is_open);
 
   return (
-    <div className="min-h-screen bg-rice-50">
+    <div className="min-h-screen bg-rice-50 flex flex-col">
       <header className="bg-rice-50/95 backdrop-blur border-b border-rice-200 sticky top-0 z-10">
         <div className="max-w-3xl mx-auto px-4 py-3 flex items-center justify-between">
           <span className="font-display text-lg font-extrabold text-ube-700">
@@ -57,7 +56,7 @@ export default function Stalls() {
         </div>
       </header>
 
-      <main className="max-w-3xl mx-auto px-4 py-7">
+      <main className="max-w-3xl w-full mx-auto px-4 py-7 flex-1">
         <h1 className="font-display text-[28px] leading-tight font-extrabold text-kape-900">
           {firstName
             ? `Where are you eating, ${firstName}?`
@@ -146,6 +145,8 @@ export default function Stalls() {
           </div>
         )}
       </main>
+
+      <Footer className="mt-12 px-4 pb-10" />
     </div>
   );
 }
