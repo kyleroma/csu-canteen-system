@@ -1,7 +1,6 @@
 import { useEffect, useState } from "react";
-import { useNavigate } from "react-router-dom";
 import api from "../../api/client";
-import { useAuth } from "../../context/AuthContext";
+import VendorHeader from "../../components/VendorHeader";
 
 const COLUMNS = [
   {
@@ -9,10 +8,103 @@ const COLUMNS = [
     label: "New",
     next: "PREPARING",
     action: "Start preparing",
+    dot: "bg-calamansi-500",
+    button: "bg-ube-700 hover:bg-ube-600 text-white",
+    empty: "No new orders yet",
   },
-  { key: "PREPARING", label: "Preparing", next: "READY", action: "Mark ready" },
-  { key: "READY", label: "Ready", next: "CLAIMED", action: "Mark collected" },
+  {
+    key: "PREPARING",
+    label: "Preparing",
+    next: "READY",
+    action: "Mark ready",
+    dot: "bg-ube-700",
+    button: "bg-dahon-600 hover:bg-dahon-700 text-white",
+    empty: "Nothing cooking right now",
+  },
+  {
+    key: "READY",
+    label: "Ready for pickup",
+    next: "CLAIMED",
+    action: "Mark collected",
+    dot: "bg-dahon-600",
+    button: "bg-kape-900 hover:bg-kape-700 text-white",
+    empty: "Nothing waiting for pickup",
+  },
 ];
+
+const time = (iso) =>
+  new Date(iso).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" });
+
+const peso = (n) => `₱${Number(n || 0).toFixed(2)}`;
+
+const urgency = (iso) => {
+  const mins = (new Date(iso).getTime() - Date.now()) / 60000;
+  if (mins < 0) return "late";
+  if (mins <= 10) return "soon";
+  return "later";
+};
+
+const PICKUP_PILL = {
+  late: "bg-sili-50 text-sili-700",
+  soon: "bg-calamansi-50 text-calamansi-600",
+  later: "bg-rice-100 text-kape-700",
+};
+
+function OrderCard({ order, column, busy, onAdvance }) {
+  const slot = order.PickupSlot;
+  const level =
+    slot && column.key !== "READY" ? urgency(slot.start_time) : "later";
+
+  return (
+    <article className="bg-white rounded-card border border-rice-200 p-4">
+      <div className="flex items-start justify-between gap-3">
+        <div className="min-w-0">
+          <p className="font-display text-xl font-extrabold leading-tight text-kape-900 tabular tracking-wide">
+            {order.order_code}
+          </p>
+          <p className="text-sm text-kape-700 truncate">
+            {order.student?.full_name || "Student"}
+          </p>
+        </div>
+        <span
+          className={`shrink-0 text-xs font-semibold px-2.5 py-1 rounded-full tabular ${PICKUP_PILL[level]}`}
+        >
+          {slot ? time(slot.start_time) : "—"}
+          {level === "late" ? " · late" : ""}
+        </span>
+      </div>
+
+      <ul className="mt-3 pt-3 border-t border-dashed border-rice-200 space-y-1">
+        {order.items?.map((line) => (
+          <li key={line.order_item_id} className="text-sm text-kape-900">
+            <span className="tabular font-semibold text-ube-700 mr-2">
+              {line.quantity}×
+            </span>
+            {line.MenuItem?.name}
+          </li>
+        ))}
+      </ul>
+
+      <div className="mt-3 flex items-baseline justify-between">
+        <span className="text-sm text-kape-700">
+          {column.key === "READY" ? "Collect in cash" : "Total"}
+        </span>
+        <span className="font-display text-lg font-extrabold text-kape-900 tabular">
+          {peso(order.total_amount)}
+        </span>
+      </div>
+
+      <button
+        type="button"
+        onClick={() => onAdvance(order, column.next)}
+        disabled={busy}
+        className={`w-full mt-3 text-sm font-semibold rounded-card py-3 transition-colors disabled:opacity-50 ${column.button}`}
+      >
+        {busy ? "Updating…" : column.action}
+      </button>
+    </article>
+  );
+}
 
 export default function VendorDashboard() {
   const [queue, setQueue] = useState({});
@@ -21,12 +113,15 @@ export default function VendorDashboard() {
   const [summary, setSummary] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
-
-  const navigate = useNavigate();
-  const { logout } = useAuth();
+  const [busy, setBusy] = useState({});
 
   const load = () => {
     api
+      .get("/vendor/orders/summary")
+      .then(({ data }) => setSummary(data))
+      .catch(() => {});
+
+    return api
       .get("/vendor/orders")
       .then(({ data }) => {
         setStall(data.stall);
@@ -38,11 +133,6 @@ export default function VendorDashboard() {
         setError(err.response?.data?.message || "Could not load the queue."),
       )
       .finally(() => setLoading(false));
-
-    api
-      .get("/vendor/orders/summary")
-      .then(({ data }) => setSummary(data))
-      .catch(() => {});
   };
 
   useEffect(() => {
@@ -51,157 +141,119 @@ export default function VendorDashboard() {
     return () => clearInterval(timer);
   }, []);
 
+  useEffect(() => {
+    const n = counts.PENDING || 0;
+    document.title = n ? `(${n}) New orders · CSU Canteen` : "CSU Canteen";
+    return () => {
+      document.title = "CSU Canteen";
+    };
+  }, [counts.PENDING]);
+
   const advance = async (order, next) => {
+    if (busy[order.order_id]) return;
+    setBusy((b) => ({ ...b, [order.order_id]: true }));
     try {
       await api.patch(`/vendor/orders/${order.order_id}/status`, {
         status: next,
       });
-      load();
     } catch (err) {
       setError(err.response?.data?.message || "Could not update the order.");
+    } finally {
+      await load();
+      setBusy((b) => {
+        const rest = { ...b };
+        delete rest[order.order_id];
+        return rest;
+      });
     }
   };
 
-  const time = (iso) =>
-    new Date(iso).toLocaleTimeString([], {
-      hour: "2-digit",
-      minute: "2-digit",
-    });
-
   return (
-    <div className="min-h-screen bg-slate-100">
-      <header className="bg-white border-b border-slate-200 sticky top-0 z-10">
-        <div className="max-w-6xl mx-auto px-4 py-3 flex items-center justify-between">
-          <div>
-            <h1 className="font-bold text-emerald-700 leading-tight">
-              {stall || "Vendor"}
-            </h1>
-            <p className="text-xs text-slate-500">Order queue</p>
-          </div>
-          <div className="flex items-center gap-4">
-            <button
-              onClick={() => navigate("/vendor/menu")}
-              className="text-sm text-emerald-700 font-medium hover:underline"
-            >
-              Menu & stock
-            </button>
-            <button
-              onClick={() => navigate("/vendor/slots")}
-              className="text-sm text-emerald-700 font-medium hover:underline"
-            >
-              Pickup times
-            </button>
-            <button
-              onClick={logout}
-              className="text-sm text-slate-500 hover:text-slate-800"
-            >
-              Sign out
-            </button>
-          </div>
-        </div>
-      </header>
+    <div className="min-h-screen bg-rice-50">
+      <VendorHeader stall={stall} />
 
       <main className="max-w-6xl mx-auto px-4 py-6">
         {summary && (
-          <div className="grid grid-cols-3 gap-3 mb-6">
-            <div className="bg-white rounded-xl border border-slate-200 p-4">
-              <p className="text-xs text-slate-500">Orders today</p>
-              <p className="text-2xl font-semibold text-slate-800 mt-1">
-                {summary.orders_today}
+          <section
+            aria-label="Today"
+            className="bg-white rounded-card border border-rice-200 grid grid-cols-3 divide-x divide-dashed divide-rice-200 mb-6"
+          >
+            <div className="px-4 py-3.5">
+              <p className="text-xs text-kape-700">Orders today</p>
+              <p className="font-display text-2xl font-extrabold text-kape-900 tabular mt-0.5">
+                {summary.orders_today ?? 0}
               </p>
             </div>
-            <div className="bg-white rounded-xl border border-slate-200 p-4">
-              <p className="text-xs text-slate-500">Collected</p>
-              <p className="text-2xl font-semibold text-slate-800 mt-1">
-                {summary.claimed_today}
+            <div className="px-4 py-3.5">
+              <p className="text-xs text-kape-700">Collected</p>
+              <p className="font-display text-2xl font-extrabold text-kape-900 tabular mt-0.5">
+                {summary.claimed_today ?? 0}
               </p>
             </div>
-            <div className="bg-white rounded-xl border border-slate-200 p-4">
-              <p className="text-xs text-slate-500">Revenue today</p>
-              <p className="text-2xl font-semibold text-emerald-700 mt-1">
-                ₱{summary.revenue_today}
+            <div className="px-4 py-3.5">
+              <p className="text-xs text-kape-700">Revenue today</p>
+              <p className="font-display text-2xl font-extrabold text-dahon-600 tabular mt-0.5 truncate">
+                {peso(summary.revenue_today)}
               </p>
             </div>
-          </div>
+          </section>
         )}
 
         {error && (
-          <p className="text-sm text-red-600 bg-red-50 border border-red-200 rounded-lg px-3 py-2 mb-4">
+          <p
+            role="alert"
+            className="text-sm text-sili-700 bg-sili-50 border border-sili-100 rounded-card px-3.5 py-2.5 mb-5"
+          >
             {error}
           </p>
         )}
 
-        {loading && <p className="text-slate-400 text-sm">Loading queue…</p>}
+        {loading && <p className="text-kape-700/60 text-sm">Loading orders…</p>}
 
-        <div className="grid md:grid-cols-3 gap-4">
-          {COLUMNS.map((col) => {
-            const orders = queue[col.key] || [];
-            return (
-              <section key={col.key}>
-                <div className="flex items-center justify-between mb-3">
-                  <h2 className="font-semibold text-slate-700">{col.label}</h2>
-                  <span className="text-xs font-medium bg-slate-200 text-slate-600 px-2 py-0.5 rounded-full">
-                    {counts[col.key] ?? 0}
-                  </span>
-                </div>
-
-                <div className="space-y-3">
-                  {orders.length === 0 && (
-                    <p className="text-sm text-slate-400 bg-white border border-dashed border-slate-200 rounded-xl p-4 text-center">
-                      Nothing here
-                    </p>
-                  )}
-
-                  {orders.map((order) => (
-                    <div
-                      key={order.order_id}
-                      className="bg-white rounded-xl border border-slate-200 p-4"
+        {!loading && (
+          <div className="grid md:grid-cols-3 gap-6 md:gap-4">
+            {COLUMNS.map((col) => {
+              const orders = queue[col.key] || [];
+              return (
+                <section key={col.key} aria-labelledby={`col-${col.key}`}>
+                  <div className="flex items-center justify-between mb-3">
+                    <h2
+                      id={`col-${col.key}`}
+                      className="flex items-center gap-2 font-display text-base font-bold text-kape-900"
                     >
-                      <div className="flex items-start justify-between gap-2">
-                        <div className="min-w-0">
-                          <p className="font-semibold text-slate-800 text-sm">
-                            {order.order_code}
-                          </p>
-                          <p className="text-xs text-slate-500 truncate">
-                            {order.student?.full_name}
-                          </p>
-                        </div>
-                        <span className="text-xs font-medium text-slate-600 bg-slate-100 px-2 py-0.5 rounded shrink-0">
-                          {order.PickupSlot
-                            ? time(order.PickupSlot.start_time)
-                            : "—"}
-                        </span>
-                      </div>
+                      <span
+                        className={`w-2.5 h-2.5 rounded-full ${col.dot}`}
+                        aria-hidden="true"
+                      />
+                      {col.label}
+                    </h2>
+                    <span className="text-xs font-semibold tabular bg-rice-100 text-kape-700 px-2.5 py-0.5 rounded-full">
+                      {counts[col.key] ?? 0}
+                    </span>
+                  </div>
 
-                      <div className="mt-3 space-y-0.5">
-                        {order.items?.map((line) => (
-                          <p
-                            key={line.order_item_id}
-                            className="text-sm text-slate-700"
-                          >
-                            {line.quantity} × {line.MenuItem?.name}
-                          </p>
-                        ))}
-                      </div>
-
-                      <p className="text-sm font-medium text-slate-800 mt-2">
-                        ₱{Number(order.total_amount).toFixed(2)}
+                  <div className="space-y-3">
+                    {orders.length === 0 && (
+                      <p className="text-sm text-kape-700/60 border border-dashed border-rice-200 rounded-card px-4 py-6 text-center">
+                        {col.empty}
                       </p>
+                    )}
 
-                      <button
-                        onClick={() => advance(order, col.next)}
-                        className="w-full mt-3 bg-emerald-600 hover:bg-emerald-700
-                                   text-white text-sm font-medium rounded-lg py-2 transition"
-                      >
-                        {col.action}
-                      </button>
-                    </div>
-                  ))}
-                </div>
-              </section>
-            );
-          })}
-        </div>
+                    {orders.map((order) => (
+                      <OrderCard
+                        key={order.order_id}
+                        order={order}
+                        column={col}
+                        busy={!!busy[order.order_id]}
+                        onAdvance={advance}
+                      />
+                    ))}
+                  </div>
+                </section>
+              );
+            })}
+          </div>
+        )}
       </main>
     </div>
   );
