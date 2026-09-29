@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
-import { useNavigate, useLocation } from "react-router-dom";
+import { useNavigate, useLocation, Link } from "react-router-dom";
 import api from "../../api/client";
 import { useAuth } from "../../context/AuthContext";
 
@@ -13,18 +13,87 @@ const LABEL = {
   CANCELLED: "Cancelled",
 };
 
-function OrderCard({ order, confirming, onConfirm, onCancel, onDismiss }) {
+const PILL = {
+  PENDING: "bg-rice-100 text-kape-700",
+  PREPARING: "bg-ube-50 text-ube-700",
+  READY: "bg-dahon-600 text-white",
+  CLAIMED: "bg-dahon-50 text-dahon-700",
+  CANCELLED: "bg-sili-50 text-sili-700",
+};
+
+const time = (iso) =>
+  new Date(iso).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" });
+
+const day = (iso) =>
+  new Date(iso).toLocaleDateString([], { month: "short", day: "numeric" });
+
+const peso = (n) => `₱${Number(n).toFixed(2)}`;
+
+function StatusPill({ status }) {
+  return (
+    <span
+      className={`text-xs font-semibold px-2.5 py-1 rounded-full shrink-0 ${PILL[status]}`}
+    >
+      {LABEL[status]}
+    </span>
+  );
+}
+
+function Progress({ status }) {
+  const stepIndex = STEPS.indexOf(status);
+  const ready = status === "READY";
+  const fill = ready ? "bg-dahon-600" : "bg-ube-700";
+  const halo = ready ? "ring-dahon-100" : "ring-ube-100";
+
+  return (
+    <div className="mt-4" aria-hidden="true">
+      <div className="flex items-center">
+        {STEPS.map((step, i) => (
+          <div key={step} className="flex items-center flex-1 last:flex-none">
+            <span
+              className={`w-3 h-3 rounded-full shrink-0 ${
+                i <= stepIndex ? fill : "bg-rice-200"
+              } ${i === stepIndex ? `ring-4 ${halo}` : ""} ${
+                i === stepIndex && status === "PREPARING"
+                  ? "motion-safe:animate-pulse"
+                  : ""
+              }`}
+            />
+            {i < STEPS.length - 1 && (
+              <span
+                className={`h-0.5 flex-1 mx-1 rounded-full ${
+                  i < stepIndex ? fill : "bg-rice-200"
+                }`}
+              />
+            )}
+          </div>
+        ))}
+      </div>
+      <div className="flex justify-between mt-2">
+        {STEPS.map((step, i) => (
+          <span
+            key={step}
+            className={`text-[11px] ${
+              i === stepIndex
+                ? "text-kape-900 font-semibold"
+                : i < stepIndex
+                  ? "text-kape-700"
+                  : "text-kape-700/50"
+            }`}
+          >
+            {step.charAt(0) + step.slice(1).toLowerCase()}
+          </span>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function ActiveCard({ order, confirming, onConfirm, onCancel, onDismiss }) {
   const [busy, setBusy] = useState(false);
   const [cancelError, setCancelError] = useState("");
-
-  const stepIndex = STEPS.indexOf(order.status);
-  const cancelled = order.status === "CANCELLED";
-
-  const time = (iso) =>
-    new Date(iso).toLocaleTimeString([], {
-      hour: "2-digit",
-      minute: "2-digit",
-    });
+  const ready = order.status === "READY";
+  const slot = order.PickupSlot;
 
   const confirmCancel = async () => {
     setBusy(true);
@@ -35,122 +104,105 @@ function OrderCard({ order, confirming, onConfirm, onCancel, onDismiss }) {
   };
 
   return (
-    <div className="bg-white rounded-xl border border-slate-200 p-4">
+    <article
+      className={`bg-white rounded-card border p-5 transition-colors ${
+        ready ? "border-dahon-600 ring-4 ring-dahon-100" : "border-rice-200"
+      }`}
+    >
       <div className="flex items-start justify-between gap-3">
-        <div>
-          <p className="font-semibold text-slate-800">{order.order_code}</p>
-          <p className="text-xs text-slate-500 mt-0.5">
-            Pickup {order.PickupSlot ? time(order.PickupSlot.start_time) : "—"}
+        <div className="min-w-0">
+          <p className="text-xs text-kape-700 truncate">
+            {order.Vendor?.stall_name || "Stall"}
+          </p>
+          <p className="font-display text-[26px] leading-tight font-extrabold text-kape-900 tabular tracking-wide">
+            {order.order_code}
           </p>
         </div>
-        <span
-          className={`text-xs font-medium px-2.5 py-1 rounded-full shrink-0 ${
-            cancelled
-              ? "bg-red-50 text-red-600"
-              : order.status === "READY"
-                ? "bg-emerald-100 text-emerald-800"
-                : "bg-slate-100 text-slate-600"
-          }`}
-        >
-          {LABEL[order.status]}
+        <StatusPill status={order.status} />
+      </div>
+
+      <p className="text-sm text-kape-700 mt-1">
+        Pickup at{" "}
+        <span className="font-semibold text-kape-900 tabular">
+          {slot ? `${time(slot.start_time)} – ${time(slot.end_time)}` : "—"}
         </span>
-      </div>
+      </p>
 
-      <div className="mt-3 space-y-1">
-        {order.items?.map((line) => (
-          <div
-            key={line.order_item_id}
-            className="flex justify-between text-sm"
-          >
-            <span className="text-slate-600">
-              {line.quantity} × {line.MenuItem?.name}
-            </span>
-            <span className="text-slate-500">
-              ₱{(Number(line.unit_price) * line.quantity).toFixed(2)}
-            </span>
-          </div>
-        ))}
-      </div>
+      <Progress status={order.status} />
 
-      <div className="border-t border-slate-100 mt-3 pt-3 flex justify-between text-sm font-medium">
-        <span className="text-slate-700">Total</span>
-        <span className="text-slate-800">
-          ₱{Number(order.total_amount).toFixed(2)}
-        </span>
-      </div>
-
-      {!cancelled && (
-        <div className="mt-4">
-          <div className="flex items-center">
-            {STEPS.map((step, i) => (
-              <div
-                key={step}
-                className="flex items-center flex-1 last:flex-none"
-              >
-                <div
-                  className={`w-3 h-3 rounded-full shrink-0 ${
-                    i <= stepIndex ? "bg-emerald-600" : "bg-slate-200"
-                  }`}
-                />
-                {i < STEPS.length - 1 && (
-                  <div
-                    className={`h-0.5 flex-1 ${
-                      i < stepIndex ? "bg-emerald-600" : "bg-slate-200"
-                    }`}
-                  />
-                )}
-              </div>
-            ))}
-          </div>
-          <div className="flex justify-between mt-1.5">
-            {STEPS.map((step, i) => (
-              <span
-                key={step}
-                className={`text-[10px] ${
-                  i <= stepIndex
-                    ? "text-emerald-700 font-medium"
-                    : "text-slate-400"
-                }`}
-              >
-                {step.charAt(0) + step.slice(1).toLowerCase()}
-              </span>
-            ))}
-          </div>
+      {ready && (
+        <div className="mt-4 bg-dahon-50 border border-dahon-100 rounded-card px-3.5 py-3">
+          <p className="text-sm font-semibold text-dahon-700">
+            Your food is ready.
+          </p>
+          <p className="text-sm text-dahon-700 mt-0.5">
+            Show code{" "}
+            <span className="font-bold tabular">{order.order_code}</span> at{" "}
+            {order.Vendor?.location || "the stall"} and pay{" "}
+            <span className="font-bold tabular">
+              {peso(order.total_amount)}
+            </span>{" "}
+            in cash.
+          </p>
         </div>
       )}
 
-      {order.status === "READY" && (
-        <p className="mt-3 text-sm text-emerald-700 bg-emerald-50 rounded-lg px-3 py-2">
-          Your order is ready. Collect it at the stall.
-        </p>
-      )}
+      <ul className="mt-4 pt-3 border-t border-dashed border-rice-200 space-y-1.5">
+        {order.items?.map((line) => (
+          <li
+            key={line.order_item_id}
+            className="flex items-baseline justify-between gap-4 text-sm"
+          >
+            <span className="text-kape-900 min-w-0">
+              <span className="tabular font-semibold text-ube-700 mr-2">
+                {line.quantity}×
+              </span>
+              {line.MenuItem?.name}
+            </span>
+            <span className="tabular text-kape-700 shrink-0">
+              {peso(Number(line.unit_price) * line.quantity)}
+            </span>
+          </li>
+        ))}
+      </ul>
+
+      <div className="mt-3 flex items-baseline justify-between">
+        <span className="text-sm text-kape-700">Total, cash on pickup</span>
+        <span className="font-display text-xl font-extrabold text-kape-900 tabular">
+          {peso(order.total_amount)}
+        </span>
+      </div>
 
       {cancelError && (
-        <p className="mt-3 text-sm text-red-600 bg-red-50 border border-red-200 rounded-lg px-3 py-2">
+        <p
+          role="alert"
+          className="mt-3 text-sm text-sili-700 bg-sili-50 border border-sili-100 rounded-card px-3.5 py-2.5"
+        >
           {cancelError}
         </p>
       )}
 
-      {/* Cancelling is only possible while the stall has not started cooking. */}
       {order.status === "PENDING" && (
-        <div className="mt-4 border-t border-slate-100 pt-3">
+        <div className="mt-4 pt-3 border-t border-rice-100">
           {confirming ? (
-            <div className="flex flex-col sm:flex-row sm:items-center gap-2">
-              <p className="text-sm text-slate-600 sm:mr-auto">
+            <div className="flex flex-col sm:flex-row sm:items-center gap-3">
+              <p className="text-sm text-kape-900 sm:mr-auto">
                 Cancel this order? The stall will release your items.
               </p>
               <div className="flex gap-2">
                 <button
+                  type="button"
                   onClick={confirmCancel}
                   disabled={busy}
-                  className="text-sm font-medium text-white bg-red-600 hover:bg-red-700 disabled:opacity-50 rounded-lg px-4 py-2"
+                  className="text-sm font-semibold text-white bg-sili-600 hover:bg-sili-700 disabled:opacity-50 rounded-card px-4 py-2.5"
                 >
                   {busy ? "Cancelling…" : "Yes, cancel"}
                 </button>
                 <button
+                  type="button"
                   onClick={onDismiss}
                   disabled={busy}
-                  className="text-sm font-medium text-slate-600 border border-slate-300 hover:bg-slate-50 rounded-lg px-4 py-2"
+                  className="text-sm font-semibold text-kape-900 border border-rice-200 bg-white hover:bg-rice-50 rounded-card px-4 py-2.5"
                 >
                   Keep order
                 </button>
@@ -158,15 +210,52 @@ function OrderCard({ order, confirming, onConfirm, onCancel, onDismiss }) {
             </div>
           ) : (
             <button
+              type="button"
               onClick={() => onConfirm(order.order_id)}
-              className="text-sm font-medium text-red-600 hover:underline"
+              className="text-sm font-semibold text-sili-600 hover:text-sili-700 hover:underline underline-offset-2 rounded"
             >
               Cancel order
             </button>
           )}
         </div>
       )}
-    </div>
+    </article>
+  );
+}
+
+function PastCard({ order }) {
+  const cancelled = order.status === "CANCELLED";
+  const summary = order.items
+    ?.map((line) => `${line.quantity}× ${line.MenuItem?.name}`)
+    .join(", ");
+
+  return (
+    <article className="bg-white/60 rounded-card border border-rice-200 px-5 py-4">
+      <div className="flex items-center justify-between gap-3">
+        <p
+          className={`font-display text-lg font-bold tabular tracking-wide ${
+            cancelled ? "text-kape-700/60 line-through" : "text-kape-900"
+          }`}
+        >
+          {order.order_code}
+        </p>
+        <StatusPill status={order.status} />
+      </div>
+      <p className="text-sm text-kape-700 mt-1 truncate">{summary}</p>
+      <div className="mt-2 flex items-baseline justify-between text-sm">
+        <span className="text-kape-700/70 truncate">
+          {order.Vendor?.stall_name}
+          {order.placed_at ? `, ${day(order.placed_at)}` : ""}
+        </span>
+        <span
+          className={`tabular font-semibold shrink-0 ${
+            cancelled ? "text-kape-700/50" : "text-kape-900"
+          }`}
+        >
+          {peso(order.total_amount)}
+        </span>
+      </div>
+    </article>
   );
 }
 
@@ -183,21 +272,21 @@ export default function Orders() {
   const load = useCallback(() => {
     return api
       .get("/orders/mine")
-      .then(({ data }) => setOrders(data.orders))
+      .then(({ data }) => {
+        setOrders(data.orders);
+        setError("");
+      })
       .catch(() => setError("Could not load your orders."))
       .finally(() => setLoading(false));
   }, []);
 
   useEffect(() => {
     load();
-    // Pause the poll while a confirm is open, so a refresh cannot
-    // pull the card out from under the student mid-decision.
     if (confirmingId !== null) return;
     const timer = setInterval(load, 10000);
     return () => clearInterval(timer);
   }, [load, confirmingId]);
 
-  // Returns an error message to show on the card, or "" on success.
   const cancelOrder = async (order) => {
     try {
       await api.patch(`/orders/${order.order_id}/cancel`);
@@ -205,8 +294,6 @@ export default function Orders() {
       await load();
       return "";
     } catch (err) {
-      // 409 means the vendor moved the order on before the tap landed —
-      // reload so the student sees the real status, then explain why.
       await load();
       setConfirmingId(null);
       return (
@@ -222,63 +309,77 @@ export default function Orders() {
     (o) => o.status === "CLAIMED" || o.status === "CANCELLED",
   );
 
-  const cardProps = (o) => ({
-    key: o.order_id,
-    order: o,
-    confirming: confirmingId === o.order_id,
-    onConfirm: setConfirmingId,
-    onCancel: cancelOrder,
-    onDismiss: () => setConfirmingId(null),
-  });
-
   return (
-    <div className="min-h-screen bg-slate-50">
-      <header className="bg-white border-b border-slate-200 sticky top-0 z-10">
+    <div className="min-h-screen bg-rice-50">
+      <header className="bg-rice-50/95 backdrop-blur border-b border-rice-200 sticky top-0 z-10">
         <div className="max-w-3xl mx-auto px-4 py-3 flex items-center justify-between">
-          <h1 className="font-bold text-emerald-700">My orders</h1>
-          <div className="flex items-center gap-4">
-            <button
-              onClick={() => navigate("/")}
-              className="text-sm text-emerald-700 font-medium hover:underline"
-            >
-              Order again
-            </button>
-            <button
-              onClick={logout}
-              className="text-sm text-slate-500 hover:text-slate-800"
-            >
-              Sign out
-            </button>
-          </div>
+          <Link
+            to="/"
+            className="font-display text-lg font-extrabold text-ube-700 rounded"
+          >
+            CSU Canteen
+          </Link>
+          <button
+            type="button"
+            onClick={logout}
+            className="text-sm text-kape-700 hover:text-kape-900 rounded"
+          >
+            Sign out
+          </button>
         </div>
       </header>
 
-      <main className="max-w-3xl mx-auto px-4 py-6 space-y-6">
+      <main className="max-w-3xl mx-auto px-4 py-7">
+        <div className="flex items-end justify-between gap-4">
+          <h1 className="font-display text-[28px] leading-tight font-extrabold text-kape-900">
+            Your orders
+          </h1>
+          <button
+            type="button"
+            onClick={() => navigate("/")}
+            className="shrink-0 text-sm font-semibold text-kape-900 bg-calamansi-500 hover:bg-calamansi-600 rounded-card px-4 py-2.5 transition-colors"
+          >
+            Order again
+          </button>
+        </div>
+
         {state?.justPlaced && (
-          <div className="bg-emerald-50 border border-emerald-200 rounded-xl px-4 py-3">
-            <p className="text-sm font-medium text-emerald-800">
-              Order {state.justPlaced} placed.
+          <div className="mt-6 bg-dahon-50 border border-dahon-100 rounded-card px-4 py-3.5">
+            <p className="text-sm font-semibold text-dahon-700">
+              Order <span className="tabular">{state.justPlaced}</span> placed.
             </p>
-            <p className="text-xs text-emerald-700 mt-0.5">
-              Pay in cash when you collect.
+            <p className="text-sm text-dahon-700 mt-0.5">
+              We&apos;ll show it here as the stall prepares it. Pay in cash when
+              you collect.
             </p>
           </div>
         )}
 
-        {loading && <p className="text-slate-400 text-sm">Loading orders…</p>}
+        {loading && (
+          <p className="text-kape-700/60 text-sm mt-8">Loading orders…</p>
+        )}
 
         {error && (
-          <p className="text-sm text-red-600 bg-red-50 border border-red-200 rounded-lg px-3 py-2">
+          <p
+            role="alert"
+            className="mt-6 text-sm text-sili-700 bg-sili-50 border border-sili-100 rounded-card px-3.5 py-2.5"
+          >
             {error}
           </p>
         )}
 
-        {!loading && orders.length === 0 && (
-          <div className="text-center py-12">
-            <p className="text-slate-500">You have no orders yet.</p>
+        {!loading && !error && orders.length === 0 && (
+          <div className="mt-8 border border-dashed border-rice-200 rounded-card px-5 py-10 text-center">
+            <p className="font-display text-lg font-bold text-kape-900">
+              No orders yet
+            </p>
+            <p className="text-sm text-kape-700 mt-1">
+              Pick a stall, choose your food, and reserve a pickup time.
+            </p>
             <button
+              type="button"
               onClick={() => navigate("/")}
-              className="mt-3 text-emerald-700 font-medium hover:underline"
+              className="mt-4 text-sm font-semibold text-ube-700 hover:underline underline-offset-2 rounded"
             >
               Browse stalls
             </button>
@@ -286,26 +387,39 @@ export default function Orders() {
         )}
 
         {active.length > 0 && (
-          <section>
-            <h2 className="text-xs font-semibold uppercase tracking-wide text-slate-400 mb-3">
-              Active
+          <section className="mt-7" aria-labelledby="active-heading">
+            <h2
+              id="active-heading"
+              className="font-display text-base font-bold text-kape-900 mb-3"
+            >
+              In progress
             </h2>
-            <div className="space-y-3">
+            <div className="space-y-4">
               {active.map((o) => (
-                <OrderCard {...cardProps(o)} />
+                <ActiveCard
+                  key={o.order_id}
+                  order={o}
+                  confirming={confirmingId === o.order_id}
+                  onConfirm={setConfirmingId}
+                  onCancel={cancelOrder}
+                  onDismiss={() => setConfirmingId(null)}
+                />
               ))}
             </div>
           </section>
         )}
 
         {past.length > 0 && (
-          <section>
-            <h2 className="text-xs font-semibold uppercase tracking-wide text-slate-400 mb-3">
+          <section className="mt-9" aria-labelledby="past-heading">
+            <h2
+              id="past-heading"
+              className="font-display text-base font-bold text-kape-900 mb-3"
+            >
               Past orders
             </h2>
             <div className="space-y-3">
               {past.map((o) => (
-                <OrderCard {...cardProps(o)} />
+                <PastCard key={o.order_id} order={o} />
               ))}
             </div>
           </section>
