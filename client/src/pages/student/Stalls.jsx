@@ -46,6 +46,12 @@ export default function Stalls() {
             <span className="text-sm text-kape-700 hidden sm:inline">
               {user?.full_name}
             </span>
+            <Link
+              to="/orders"
+              className="text-sm font-semibold text-ube-700 hover:text-ube-900 rounded"
+            >
+              My orders
+            </Link>
             <button
               onClick={logout}
               className="text-sm text-kape-700 hover:text-kape-900 rounded"
