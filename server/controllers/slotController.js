@@ -49,7 +49,6 @@ exports.listMySlots = async (req, res) => {
   }
 };
 
-// Generate a run of slots: "open 10:00 to 14:00, 15-min windows, capacity 10"
 exports.generateSlots = async (req, res) => {
   try {
     const vendor = await getMyVendor(req.user.user_id);
@@ -69,11 +68,12 @@ exports.generateSlots = async (req, res) => {
         .status(400)
         .json({ message: "Interval must be between 5 and 120 minutes." });
     }
-    if (cap < 1) {
-      return res.status(400).json({ message: "Capacity must be at least 1." });
+    if (!Number.isInteger(cap) || cap < 1) {
+      return res
+        .status(400)
+        .json({ message: "Capacity must be a whole number, 1 or more." });
     }
 
-    // "HH:MM" today, in server local time
     const build = (hhmm) => {
       const [h, m] = hhmm.split(":").map(Number);
       const d = new Date();
@@ -84,6 +84,9 @@ exports.generateSlots = async (req, res) => {
     const open = build(open_time);
     const close = build(close_time);
 
+    if (isNaN(open) || isNaN(close)) {
+      return res.status(400).json({ message: "Times must look like 07:30." });
+    }
     if (close <= open) {
       return res
         .status(400)
@@ -140,31 +143,51 @@ exports.generateSlots = async (req, res) => {
 exports.updateSlot = async (req, res) => {
   try {
     const vendor = await getMyVendor(req.user.user_id);
-    const slot = await PickupSlot.findByPk(req.params.id);
+    const slotId = Number(req.params.id);
+    const cap = Number(req.body.capacity);
 
-    if (!slot) return res.status(404).json({ message: "Slot not found." });
-    if (slot.vendor_id !== vendor.vendor_id) {
+    if (!Number.isInteger(slotId)) {
+      return res.status(404).json({ message: "Slot not found." });
+    }
+    if (
+      req.body.capacity === undefined ||
+      req.body.capacity === "" ||
+      !Number.isInteger(cap) ||
+      cap < 1
+    ) {
       return res
-        .status(403)
-        .json({ message: "That slot belongs to another stall." });
+        .status(400)
+        .json({ message: "Capacity must be a whole number, 1 or more." });
     }
 
-    const { capacity } = req.body;
-    if (capacity === undefined) {
-      return res.status(400).json({ message: "Capacity is required." });
-    }
-
-    const cap = Number(capacity);
-    if (cap < slot.booked_count) {
-      return res.status(409).json({
-        message: `Capacity cannot be below ${slot.booked_count} — that many orders are already booked.`,
+    const result = await db.sequelize.transaction(async (t) => {
+      const slot = await PickupSlot.findOne({
+        where: { slot_id: slotId, vendor_id: vendor.vendor_id },
+        transaction: t,
+        lock: t.LOCK.UPDATE,
       });
-    }
 
-    slot.capacity = cap;
-    await slot.save();
+      if (!slot) {
+        return { code: 404, body: { message: "Slot not found." } };
+      }
 
-    return res.json({ message: "Slot updated.", slot });
+      if (cap < slot.booked_count) {
+        return {
+          code: 409,
+          body: {
+            message: `Capacity cannot be below ${slot.booked_count}. That many orders are already booked.`,
+            code: "CAPACITY_BELOW_BOOKED",
+          },
+        };
+      }
+
+      slot.capacity = cap;
+      await slot.save({ transaction: t });
+
+      return { code: 200, body: { message: "Slot updated.", slot } };
+    });
+
+    return res.status(result.code).json(result.body);
   } catch (err) {
     if (err.code === "NO_VENDOR")
       return res.status(404).json({ message: err.message });
@@ -176,14 +199,16 @@ exports.updateSlot = async (req, res) => {
 exports.deleteSlot = async (req, res) => {
   try {
     const vendor = await getMyVendor(req.user.user_id);
-    const slot = await PickupSlot.findByPk(req.params.id);
+    const slotId = Number(req.params.id);
 
-    if (!slot) return res.status(404).json({ message: "Slot not found." });
-    if (slot.vendor_id !== vendor.vendor_id) {
-      return res
-        .status(403)
-        .json({ message: "That slot belongs to another stall." });
+    if (!Number.isInteger(slotId)) {
+      return res.status(404).json({ message: "Slot not found." });
     }
+
+    const slot = await PickupSlot.findOne({
+      where: { slot_id: slotId, vendor_id: vendor.vendor_id },
+    });
+    if (!slot) return res.status(404).json({ message: "Slot not found." });
 
     const orders = await Order.count({ where: { slot_id: slot.slot_id } });
     if (orders > 0) {

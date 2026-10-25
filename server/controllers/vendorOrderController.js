@@ -1,23 +1,31 @@
-const db = require('../models');
+const db = require("../models");
 const { Order, OrderItem, MenuItem, Vendor, User, PickupSlot } = db;
+const { Op } = db.Sequelize;
 
-// Legal one-step forward transitions
 const TRANSITIONS = {
-  PENDING:   ['PREPARING', 'CANCELLED'],
-  PREPARING: ['READY', 'CANCELLED'],
-  READY:     ['CLAIMED', 'CANCELLED'],
-  CLAIMED:   [],
-  CANCELLED: []
+  PENDING: ["PREPARING"],
+  PREPARING: ["READY"],
+  READY: ["CLAIMED"],
+  CLAIMED: [],
+  CANCELLED: [],
 };
+
+const ACTIVE = ["PENDING", "PREPARING", "READY"];
 
 async function getMyVendor(userId) {
   const vendor = await Vendor.findOne({ where: { user_id: userId } });
   if (!vendor) {
-    const err = new Error('No stall is linked to this account.');
-    err.code = 'NO_VENDOR';
+    const err = new Error("No stall is linked to this account.");
+    err.code = "NO_VENDOR";
     throw err;
   }
   return vendor;
+}
+
+function startOfToday() {
+  const d = new Date();
+  d.setHours(0, 0, 0, 0);
+  return d;
 }
 
 exports.queue = async (req, res) => {
@@ -25,83 +33,111 @@ exports.queue = async (req, res) => {
     const vendor = await getMyVendor(req.user.user_id);
     const { status } = req.query;
 
-    const where = { vendor_id: vendor.vendor_id };
+    const where = {
+      vendor_id: vendor.vendor_id,
+      [Op.or]: [
+        { status: { [Op.in]: ACTIVE } },
+        { placed_at: { [Op.gte]: startOfToday() } },
+      ],
+    };
     if (status) where.status = status.toUpperCase();
 
     const orders = await Order.findAll({
       where,
       include: [
-        { model: User, as: 'student', attributes: ['full_name', 'email'] },
-        { model: PickupSlot, attributes: ['start_time', 'end_time'] },
+        { model: User, as: "student", attributes: ["full_name", "email"] },
+        { model: PickupSlot, attributes: ["start_time", "end_time"] },
         {
           model: OrderItem,
-          as: 'items',
-          include: [{ model: MenuItem, attributes: ['name'] }]
-        }
+          as: "items",
+          include: [{ model: MenuItem, attributes: ["name"] }],
+        },
       ],
-      order: [['placed_at', 'ASC']]
+      order: [["placed_at", "ASC"]],
     });
 
-    // group by status so the dashboard can render columns directly
-    const grouped = { PENDING: [], PREPARING: [], READY: [], CLAIMED: [], CANCELLED: [] };
-    orders.forEach(o => grouped[o.status].push(o));
+    const grouped = {
+      PENDING: [],
+      PREPARING: [],
+      READY: [],
+      CLAIMED: [],
+      CANCELLED: [],
+    };
+    orders.forEach((o) => grouped[o.status].push(o));
 
     return res.json({
       stall: vendor.stall_name,
       counts: Object.fromEntries(
-        Object.entries(grouped).map(([k, v]) => [k, v.length])
+        Object.entries(grouped).map(([k, v]) => [k, v.length]),
       ),
-      orders: status ? orders : grouped
+      orders: status ? orders : grouped,
     });
   } catch (err) {
-    if (err.code === 'NO_VENDOR') return res.status(404).json({ message: err.message });
+    if (err.code === "NO_VENDOR")
+      return res.status(404).json({ message: err.message });
     console.error(err);
-    return res.status(500).json({ message: 'Could not load order queue.' });
+    return res.status(500).json({ message: "Could not load order queue." });
   }
 };
 
 exports.advanceStatus = async (req, res) => {
   try {
     const vendor = await getMyVendor(req.user.user_id);
-    const { status } = req.body;
+    const next = String(req.body.status || "").toUpperCase();
+    const orderId = Number(req.params.id);
 
-    if (!status) {
-      return res.status(400).json({ message: 'A new status is required.' });
+    if (!next) {
+      return res.status(400).json({ message: "A new status is required." });
+    }
+    if (!Number.isInteger(orderId)) {
+      return res.status(404).json({ message: "Order not found." });
     }
 
-    const order = await Order.findByPk(req.params.id);
-    if (!order) return res.status(404).json({ message: 'Order not found.' });
-
-    if (order.vendor_id !== vendor.vendor_id) {
-      return res.status(403).json({ message: 'This order belongs to another stall.' });
-    }
-
-    const next = status.toUpperCase();
-    const allowed = TRANSITIONS[order.status] || [];
-
-    if (!allowed.includes(next)) {
-      return res.status(409).json({
-        message: `Cannot move an order from ${order.status} to ${next}.`,
-        code: 'ILLEGAL_TRANSITION',
-        allowed
+    const result = await db.sequelize.transaction(async (t) => {
+      const order = await Order.findOne({
+        where: { order_id: orderId, vendor_id: vendor.vendor_id },
+        transaction: t,
+        lock: t.LOCK.UPDATE,
       });
-    }
 
-    order.status = next;
-    await order.save();
-
-    return res.json({
-      message: `Order ${order.order_code} is now ${next}.`,
-      order: {
-        order_id: order.order_id,
-        order_code: order.order_code,
-        status: order.status
+      if (!order) {
+        return { code: 404, body: { message: "Order not found." } };
       }
+
+      const allowed = TRANSITIONS[order.status] || [];
+      if (!allowed.includes(next)) {
+        return {
+          code: 409,
+          body: {
+            message: `Cannot move an order from ${order.status} to ${next}.`,
+            code: "ILLEGAL_TRANSITION",
+            allowed,
+          },
+        };
+      }
+
+      order.status = next;
+      await order.save({ transaction: t });
+
+      return {
+        code: 200,
+        body: {
+          message: `Order ${order.order_code} is now ${next}.`,
+          order: {
+            order_id: order.order_id,
+            order_code: order.order_code,
+            status: order.status,
+          },
+        },
+      };
     });
+
+    return res.status(result.code).json(result.body);
   } catch (err) {
-    if (err.code === 'NO_VENDOR') return res.status(404).json({ message: err.message });
+    if (err.code === "NO_VENDOR")
+      return res.status(404).json({ message: err.message });
     console.error(err);
-    return res.status(500).json({ message: 'Could not update order.' });
+    return res.status(500).json({ message: "Could not update order." });
   }
 };
 
@@ -109,17 +145,18 @@ exports.dailySummary = async (req, res) => {
   try {
     const vendor = await getMyVendor(req.user.user_id);
 
-    const start = new Date(); start.setHours(0, 0, 0, 0);
-    const end = new Date();   end.setHours(23, 59, 59, 999);
+    const start = startOfToday();
+    const end = new Date();
+    end.setHours(23, 59, 59, 999);
 
     const orders = await Order.findAll({
       where: {
         vendor_id: vendor.vendor_id,
-        placed_at: { [db.Sequelize.Op.between]: [start, end] }
-      }
+        placed_at: { [Op.between]: [start, end] },
+      },
     });
 
-    const claimed = orders.filter(o => o.status === 'CLAIMED');
+    const claimed = orders.filter((o) => o.status === "CLAIMED");
     const revenue = claimed.reduce((sum, o) => sum + Number(o.total_amount), 0);
 
     return res.json({
@@ -127,11 +164,12 @@ exports.dailySummary = async (req, res) => {
       date: start.toISOString().slice(0, 10),
       orders_today: orders.length,
       claimed_today: claimed.length,
-      revenue_today: revenue.toFixed(2)
+      revenue_today: revenue.toFixed(2),
     });
   } catch (err) {
-    if (err.code === 'NO_VENDOR') return res.status(404).json({ message: err.message });
+    if (err.code === "NO_VENDOR")
+      return res.status(404).json({ message: err.message });
     console.error(err);
-    return res.status(500).json({ message: 'Could not load summary.' });
+    return res.status(500).json({ message: "Could not load summary." });
   }
 };
