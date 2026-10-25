@@ -1,9 +1,9 @@
 import { useEffect, useState } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import api from "../../api/client";
+import { useAuth } from "../../context/AuthContext";
+import { loadCart, saveCart } from "../../utils/cartStorage";
 
-// Photos are optional: a stall that has not added one still gets a clean row
-// rather than a grey placeholder box pretending an image is missing.
 function Photo({ src, alt, dimmed }) {
   const [failed, setFailed] = useState(false);
   if (!src || failed) return null;
@@ -24,10 +24,12 @@ function Photo({ src, alt, dimmed }) {
 export default function StallMenu() {
   const { id } = useParams();
   const navigate = useNavigate();
+  const { user } = useAuth();
+  const userId = user?.user_id;
 
   const [stall, setStall] = useState(null);
   const [menu, setMenu] = useState([]);
-  const [cart, setCart] = useState({});
+  const [cart, setCart] = useState(() => loadCart(userId, id));
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
 
@@ -37,10 +39,24 @@ export default function StallMenu() {
       .then(({ data }) => {
         setStall(data.stall);
         setMenu(data.menu);
+        setCart((c) => {
+          const next = {};
+          data.menu.forEach((item) => {
+            const qty = c[item.item_id];
+            if (qty > 0 && item.available && item.stock_left > 0) {
+              next[item.item_id] = Math.min(qty, item.stock_left);
+            }
+          });
+          return next;
+        });
       })
       .catch(() => setError("Could not load this menu."))
       .finally(() => setLoading(false));
   }, [id]);
+
+  useEffect(() => {
+    if (!loading) saveCart(userId, id, cart);
+  }, [cart, userId, id, loading]);
 
   const addToCart = (item) => {
     setCart((c) => ({ ...c, [item.item_id]: (c[item.item_id] || 0) + 1 }));
@@ -61,7 +77,6 @@ export default function StallMenu() {
     0,
   );
 
-  // Group items by category for a cleaner list
   const grouped = menu.reduce((acc, item) => {
     const key = item.category || "Other";
     (acc[key] = acc[key] || []).push(item);
@@ -100,7 +115,7 @@ export default function StallMenu() {
           </p>
         )}
 
-        {!loading && menu.length === 0 && (
+        {!loading && !error && menu.length === 0 && (
           <div className="border border-dashed border-rice-200 rounded-card px-5 py-10 text-center">
             <p className="font-display text-lg font-bold text-kape-900">
               Nothing on the menu yet
@@ -125,7 +140,7 @@ export default function StallMenu() {
                 return (
                   <li
                     key={item.item_id}
-                    className={`rounded-card border p-4 flex items-center justify-between gap-4 ${
+                    className={`min-h-[6rem] rounded-card border px-4 py-3 flex items-center justify-between gap-3 ${
                       soldOut
                         ? "bg-rice-100/60 border-rice-200"
                         : "bg-white border-rice-200"
@@ -162,47 +177,48 @@ export default function StallMenu() {
                       </div>
                     </div>
 
-                    {soldOut ? (
-                      // A stamp reads faster than grey text when you are
-                      // scanning a menu during a short break.
-                      <span
-                        className="shrink-0 -rotate-6 border-2 border-sili-600/70 text-sili-600/80
-                                   font-display font-extrabold text-xs px-2.5 py-1 rounded"
-                      >
-                        Sold out
-                      </span>
-                    ) : qty === 0 ? (
-                      <button
-                        onClick={() => addToCart(item)}
-                        className="bg-calamansi-500 hover:bg-calamansi-600 text-kape-900 text-sm
-                                   font-semibold px-5 py-2 rounded-full shrink-0 transition-colors"
-                      >
-                        Add
-                      </button>
-                    ) : (
-                      <div className="flex items-center gap-3 shrink-0">
-                        <button
-                          onClick={() => removeFromCart(item)}
-                          aria-label={`Remove one ${item.name}`}
-                          className="w-9 h-9 rounded-full border border-rice-200 text-kape-900
-                                     hover:bg-rice-100 text-lg leading-none"
+                    <div className="w-[7.25rem] shrink-0 flex justify-end">
+                      {soldOut ? (
+                        <span
+                          className="-rotate-6 border-2 border-sili-600/70 text-sili-600/80
+                                     font-display font-extrabold text-xs px-2.5 py-1 rounded"
                         >
-                          −
-                        </button>
-                        <span className="w-5 text-center font-semibold text-kape-900 tabular">
-                          {qty}
+                          Sold out
                         </span>
+                      ) : qty === 0 ? (
                         <button
                           onClick={() => addToCart(item)}
-                          disabled={qty >= item.stock_left}
-                          aria-label={`Add one ${item.name}`}
-                          className="w-9 h-9 rounded-full bg-calamansi-500 text-kape-900 text-lg leading-none
-                                     hover:bg-calamansi-600 disabled:bg-rice-100 disabled:text-kape-700/40"
+                          aria-label={`Add ${item.name}`}
+                          className="h-9 px-4 bg-calamansi-500 hover:bg-calamansi-600 text-kape-900 text-sm
+                                     font-semibold rounded-full transition-colors"
                         >
-                          +
+                          Add
                         </button>
-                      </div>
-                    )}
+                      ) : (
+                        <div className="flex items-center gap-2">
+                          <button
+                            onClick={() => removeFromCart(item)}
+                            aria-label={`Remove one ${item.name}`}
+                            className="w-9 h-9 rounded-full border border-rice-200 bg-white text-kape-900
+                                       hover:bg-rice-100 text-lg leading-none"
+                          >
+                            −
+                          </button>
+                          <span className="w-6 text-center font-semibold text-kape-900 tabular">
+                            {qty}
+                          </span>
+                          <button
+                            onClick={() => addToCart(item)}
+                            disabled={qty >= item.stock_left}
+                            aria-label={`Add one ${item.name}`}
+                            className="w-9 h-9 rounded-full bg-calamansi-500 text-kape-900 text-lg leading-none
+                                       hover:bg-calamansi-600 disabled:bg-rice-100 disabled:text-kape-700/40"
+                          >
+                            +
+                          </button>
+                        </div>
+                      )}
+                    </div>
                   </li>
                 );
               })}
@@ -211,11 +227,10 @@ export default function StallMenu() {
         ))}
       </main>
 
-      {/* The cart is a receipt in progress: torn top edge, figures in a column */}
       {cartCount > 0 && (
         <div className="fixed bottom-0 inset-x-0 bg-white border-t border-rice-200">
           <div className="receipt-edge h-0.5" />
-          <div className="max-w-3xl mx-auto px-4 pt-3 pb-4">
+          <div className="max-w-3xl mx-auto px-4 pt-3 pb-[max(1rem,env(safe-area-inset-bottom))]">
             <div className="flex items-baseline justify-between mb-3">
               <span className="text-sm text-kape-700">
                 {cartCount} {cartCount === 1 ? "item" : "items"}

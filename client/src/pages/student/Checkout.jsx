@@ -1,6 +1,8 @@
 import { useEffect, useState } from "react";
 import { useParams, useNavigate, useLocation } from "react-router-dom";
 import api from "../../api/client";
+import { useAuth } from "../../context/AuthContext";
+import { clearCart } from "../../utils/cartStorage";
 
 const STOCK_ERRORS = ["ITEM_SOLD_OUT", "INSUFFICIENT_STOCK", "ITEM_NOT_FOUND"];
 
@@ -8,6 +10,7 @@ export default function Checkout() {
   const { id } = useParams();
   const navigate = useNavigate();
   const { state } = useLocation();
+  const { user } = useAuth();
 
   const [slots, setSlots] = useState([]);
   const [selected, setSelected] = useState(null);
@@ -59,6 +62,7 @@ export default function Checkout() {
         slot_id: selected,
         items: lines.map((l) => ({ item_id: l.item_id, quantity: l.qty })),
       });
+      clearCart(user?.user_id, id);
       navigate("/orders", {
         replace: true,
         state: { justPlaced: data.order.order_code },
