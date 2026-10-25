@@ -1,7 +1,6 @@
-import { useEffect, useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { useEffect, useRef, useState } from "react";
 import api from "../../api/client";
-import { useAuth } from "../../context/AuthContext";
+import VendorHeader from "../../components/VendorHeader";
 
 const EMPTY = {
   name: "",
@@ -12,7 +11,79 @@ const EMPTY = {
 };
 
 const inputClass =
-  "w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500";
+  "w-full rounded-card border border-rice-200 bg-rice-50 px-3.5 py-2.5 text-base text-kape-900 placeholder:text-kape-700/40 focus:border-ube-600 focus:bg-white transition";
+
+const noSpinner =
+  "[appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none";
+
+const peso = (n) => `₱${Number(n || 0).toFixed(2)}`;
+
+function Field({ id, label, className = "", ...props }) {
+  return (
+    <div className={className}>
+      <label
+        htmlFor={id}
+        className="block text-sm font-semibold text-kape-900 mb-1.5"
+      >
+        {label}
+      </label>
+      <input id={id} className={inputClass} {...props} />
+    </div>
+  );
+}
+
+function ItemThumb({ src, name, muted }) {
+  const [failed, setFailed] = useState(false);
+
+  useEffect(() => {
+    setFailed(false);
+  }, [src]);
+
+  if (!src || failed) {
+    return (
+      <div
+        className="w-14 h-14 rounded-[10px] grid place-items-center shrink-0 bg-rice-100 font-display text-xl font-extrabold text-kape-700/50"
+        aria-hidden="true"
+      >
+        {name.trim().charAt(0).toUpperCase()}
+      </div>
+    );
+  }
+
+  return (
+    <img
+      src={src}
+      alt=""
+      loading="lazy"
+      onError={() => setFailed(true)}
+      className={`w-14 h-14 rounded-[10px] object-cover bg-rice-100 shrink-0 ${
+        muted ? "opacity-50 grayscale" : ""
+      }`}
+    />
+  );
+}
+
+function StatusBadge({ item }) {
+  if (item.is_active === false) {
+    return (
+      <span className="text-xs font-semibold bg-rice-100 text-kape-700 px-2.5 py-1 rounded-full">
+        Hidden
+      </span>
+    );
+  }
+  if (item.is_sold_out || item.stock_qty === 0) {
+    return (
+      <span className="text-xs font-semibold bg-sili-50 text-sili-700 px-2.5 py-1 rounded-full">
+        Sold out
+      </span>
+    );
+  }
+  return (
+    <span className="text-xs font-semibold bg-dahon-50 text-dahon-700 px-2.5 py-1 rounded-full">
+      Available
+    </span>
+  );
+}
 
 export default function VendorMenu() {
   const [stall, setStall] = useState("");
@@ -22,13 +93,13 @@ export default function VendorMenu() {
   const [editForm, setEditForm] = useState(EMPTY);
   const [showAdd, setShowAdd] = useState(false);
   const [newItem, setNewItem] = useState(EMPTY);
+  const [adding, setAdding] = useState(false);
   const [busyId, setBusyId] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
 
-  const navigate = useNavigate();
-  const { logout } = useAuth();
+  const noticeTimer = useRef(null);
 
   const load = () => {
     setLoading(true);
@@ -48,11 +119,13 @@ export default function VendorMenu() {
 
   useEffect(() => {
     load();
+    return () => clearTimeout(noticeTimer.current);
   }, []);
 
   const flash = (message) => {
+    clearTimeout(noticeTimer.current);
     setNotice(message);
-    setTimeout(() => setNotice(""), 2500);
+    noticeTimer.current = setTimeout(() => setNotice(""), 2500);
   };
 
   const replaceItem = (updated) =>
@@ -60,7 +133,6 @@ export default function VendorMenu() {
       prev.map((i) => (i.item_id === updated.item_id ? updated : i)),
     );
 
-  // Every change goes through PATCH /vendor/menu/:id
   const patchItem = async (id, body, message) => {
     setBusyId(id);
     setError("");
@@ -75,6 +147,13 @@ export default function VendorMenu() {
     } finally {
       setBusyId(null);
     }
+  };
+
+  const bumpStock = (item, delta) => {
+    const current = Number(stockDraft[item.item_id] ?? item.stock_qty);
+    const base = Number.isFinite(current) ? current : 0;
+    const next = Math.max(0, Math.floor(base) + delta);
+    setStockDraft((prev) => ({ ...prev, [item.item_id]: String(next) }));
   };
 
   const saveStock = async (item) => {
@@ -98,7 +177,6 @@ export default function VendorMenu() {
     }
   };
 
-  // Explicit true/false, not the toggle route — a double tap can't flip it back
   const setSoldOut = (item, value) =>
     patchItem(
       item.item_id,
@@ -107,6 +185,7 @@ export default function VendorMenu() {
     );
 
   const startEdit = (item) => {
+    setError("");
     setEditingId(item.item_id);
     setEditForm({
       name: item.name,
@@ -129,7 +208,6 @@ export default function VendorMenu() {
         name: editForm.name.trim(),
         category: editForm.category.trim() || null,
         price,
-        // An empty box clears the photo
         image_url: editForm.image_url.trim(),
       },
       "Item updated.",
@@ -139,6 +217,7 @@ export default function VendorMenu() {
 
   const addItem = async (e) => {
     e.preventDefault();
+    if (adding) return;
     setError("");
 
     const price = Number(newItem.price);
@@ -150,6 +229,7 @@ export default function VendorMenu() {
     if (!Number.isInteger(qty) || qty < 0)
       return setError("Stock must be a whole number, 0 or more.");
 
+    setAdding(true);
     try {
       const { data } = await api.post("/vendor/menu", {
         name: newItem.name.trim(),
@@ -164,176 +244,154 @@ export default function VendorMenu() {
       flash(`${data.item.name} added.`);
     } catch (err) {
       setError(err.response?.data?.message || "Could not add the item.");
+    } finally {
+      setAdding(false);
     }
   };
 
-  const badge = (item) => {
-    if (item.is_active === false)
-      return (
-        <span className="text-xs font-medium bg-slate-200 text-slate-600 px-2 py-0.5 rounded-full">
-          Hidden
-        </span>
-      );
-    if (item.is_sold_out || item.stock_qty === 0)
-      return (
-        <span className="text-xs font-medium bg-red-100 text-red-700 px-2 py-0.5 rounded-full">
-          Sold out
-        </span>
-      );
-    return (
-      <span className="text-xs font-medium bg-emerald-100 text-emerald-700 px-2 py-0.5 rounded-full">
-        Available
-      </span>
-    );
-  };
+  const soldOutCount = items.filter(
+    (i) => i.is_active !== false && (i.is_sold_out || i.stock_qty === 0),
+  ).length;
 
   return (
-    <div className="min-h-screen bg-slate-100">
-      <header className="bg-white border-b border-slate-200 sticky top-0 z-10">
-        <div className="max-w-4xl mx-auto px-4 py-3 flex items-center justify-between">
-          <div>
-            <h1 className="font-bold text-emerald-700 leading-tight">
-              {stall || "Vendor"}
-            </h1>
-            <p className="text-xs text-slate-500">Menu & stock</p>
-          </div>
-          <div className="flex items-center gap-4">
-            <button
-              onClick={() => navigate("/vendor")}
-              className="text-sm text-emerald-700 font-medium hover:underline"
-            >
-              Order queue
-            </button>
-            <button
-              onClick={logout}
-              className="text-sm text-slate-500 hover:text-slate-800"
-            >
-              Sign out
-            </button>
-          </div>
-        </div>
-      </header>
+    <div className="min-h-screen bg-rice-50">
+      <VendorHeader stall={stall} />
 
-      <main className="max-w-4xl mx-auto px-4 py-6">
-        <div className="flex items-center justify-between mb-4">
-          <h2 className="font-semibold text-slate-700">
-            Items{" "}
-            <span className="text-slate-400 font-normal">({items.length})</span>
-          </h2>
-          <div className="flex items-center gap-2">
+      <main className="max-w-4xl mx-auto px-4 py-6 pb-28">
+        <div className="flex items-end justify-between gap-4">
+          <div>
+            <h1 className="font-display text-[28px] leading-tight font-extrabold text-kape-900">
+              Menu & stock
+            </h1>
+            <p className="text-sm text-kape-700 mt-1">
+              <span className="tabular">{items.length}</span>{" "}
+              {items.length === 1 ? "item" : "items"}
+              {soldOutCount > 0 && (
+                <>
+                  ,{" "}
+                  <span className="text-sili-700 font-semibold tabular">
+                    {soldOutCount} sold out
+                  </span>
+                </>
+              )}
+            </p>
+          </div>
+          <div className="flex items-center gap-2 shrink-0">
             <button
+              type="button"
               onClick={load}
-              className="text-sm text-slate-600 bg-white border border-slate-300 hover:bg-slate-50 rounded-lg px-3 py-2"
+              className="text-sm font-semibold text-kape-900 bg-white border border-rice-200 hover:bg-rice-100 rounded-card px-3.5 py-2.5"
             >
               Refresh
             </button>
             <button
-              onClick={() => setShowAdd((v) => !v)}
-              className="text-sm text-white bg-emerald-600 hover:bg-emerald-700 font-medium rounded-lg px-3 py-2"
+              type="button"
+              onClick={() => {
+                setShowAdd((v) => !v);
+                setError("");
+              }}
+              aria-expanded={showAdd}
+              className={`text-sm font-semibold rounded-card px-4 py-2.5 transition-colors ${
+                showAdd
+                  ? "text-kape-900 bg-white border border-rice-200 hover:bg-rice-100"
+                  : "text-kape-900 bg-calamansi-500 hover:bg-calamansi-600"
+              }`}
             >
               {showAdd ? "Close" : "+ Add item"}
             </button>
           </div>
         </div>
 
-        {error && (
-          <p className="text-sm text-red-600 bg-red-50 border border-red-200 rounded-lg px-3 py-2 mb-4">
-            {error}
-          </p>
-        )}
-        {notice && (
-          <p className="text-sm text-emerald-700 bg-emerald-50 border border-emerald-200 rounded-lg px-3 py-2 mb-4">
-            {notice}
-          </p>
-        )}
-
         {showAdd && (
           <form
             onSubmit={addItem}
-            className="bg-white rounded-xl border border-slate-200 p-4 mb-4 grid gap-3 sm:grid-cols-2"
+            className="mt-5 bg-white rounded-card border border-rice-200 p-5 grid gap-4 sm:grid-cols-2"
           >
+            <h2 className="sm:col-span-2 font-display text-base font-bold text-kape-900">
+              New item
+            </h2>
+            <Field
+              id="new-name"
+              label="Name"
+              className="sm:col-span-2"
+              value={newItem.name}
+              onChange={(e) => setNewItem({ ...newItem, name: e.target.value })}
+              placeholder="e.g. Chicken Adobo"
+            />
+            <Field
+              id="new-category"
+              label="Category"
+              value={newItem.category}
+              onChange={(e) =>
+                setNewItem({ ...newItem, category: e.target.value })
+              }
+              placeholder="e.g. Rice meals"
+            />
+            <Field
+              id="new-price"
+              label="Price (₱)"
+              type="number"
+              inputMode="decimal"
+              min="0"
+              step="0.01"
+              value={newItem.price}
+              onChange={(e) =>
+                setNewItem({ ...newItem, price: e.target.value })
+              }
+              placeholder="0.00"
+            />
+            <Field
+              id="new-stock"
+              label="Starting stock"
+              type="number"
+              inputMode="numeric"
+              min="0"
+              step="1"
+              value={newItem.stock_qty}
+              onChange={(e) =>
+                setNewItem({ ...newItem, stock_qty: e.target.value })
+              }
+              placeholder="0"
+            />
+            <Field
+              id="new-photo"
+              label="Photo link (optional)"
+              className="sm:col-span-2"
+              type="url"
+              value={newItem.image_url}
+              onChange={(e) =>
+                setNewItem({ ...newItem, image_url: e.target.value })
+              }
+              placeholder="https://… a link to a photo of this dish"
+            />
             <div className="sm:col-span-2">
-              <label className="text-xs text-slate-500">Name</label>
-              <input
-                className={inputClass}
-                value={newItem.name}
-                onChange={(e) =>
-                  setNewItem({ ...newItem, name: e.target.value })
-                }
-                placeholder="e.g. Chicken Adobo"
-              />
-            </div>
-            <div>
-              <label className="text-xs text-slate-500">Category</label>
-              <input
-                className={inputClass}
-                value={newItem.category}
-                onChange={(e) =>
-                  setNewItem({ ...newItem, category: e.target.value })
-                }
-                placeholder="e.g. Rice meals"
-              />
-            </div>
-            <div>
-              <label className="text-xs text-slate-500">Price (₱)</label>
-              <input
-                type="number"
-                min="0"
-                step="0.01"
-                className={inputClass}
-                value={newItem.price}
-                onChange={(e) =>
-                  setNewItem({ ...newItem, price: e.target.value })
-                }
-              />
-            </div>
-            <div>
-              <label className="text-xs text-slate-500">Starting stock</label>
-              <input
-                type="number"
-                min="0"
-                step="1"
-                className={inputClass}
-                value={newItem.stock_qty}
-                onChange={(e) =>
-                  setNewItem({ ...newItem, stock_qty: e.target.value })
-                }
-                placeholder="0"
-              />
-            </div>
-            <div className="sm:col-span-2">
-              <label className="text-xs text-slate-500">
-                Photo link (optional)
-              </label>
-              <input
-                className={inputClass}
-                value={newItem.image_url}
-                onChange={(e) =>
-                  setNewItem({ ...newItem, image_url: e.target.value })
-                }
-                placeholder="https://… paste a link to a photo of this dish"
-              />
-            </div>
-            <div className="flex items-end">
               <button
                 type="submit"
-                className="w-full bg-emerald-600 hover:bg-emerald-700 text-white text-sm font-medium rounded-lg py-2"
+                disabled={adding}
+                className="w-full sm:w-auto bg-calamansi-500 hover:bg-calamansi-600 disabled:bg-rice-100 disabled:text-kape-700/50 text-kape-900 text-sm font-semibold rounded-card px-6 py-3 transition-colors"
               >
-                Save item
+                {adding ? "Saving…" : "Save item"}
               </button>
             </div>
           </form>
         )}
 
-        {loading && <p className="text-slate-400 text-sm">Loading menu…</p>}
-
-        {!loading && items.length === 0 && (
-          <p className="text-sm text-slate-400 bg-white border border-dashed border-slate-200 rounded-xl p-6 text-center">
-            No items yet. Add your first one.
-          </p>
+        {loading && items.length === 0 && (
+          <p className="text-kape-700/60 text-sm mt-8">Loading menu…</p>
         )}
 
-        <div className="space-y-3">
+        {!loading && items.length === 0 && (
+          <div className="mt-8 border border-dashed border-rice-200 rounded-card px-5 py-10 text-center">
+            <p className="font-display text-lg font-bold text-kape-900">
+              Your menu is empty
+            </p>
+            <p className="text-sm text-kape-700 mt-1">
+              Add your first dish so students can start ordering.
+            </p>
+          </div>
+        )}
+
+        <ul className="mt-6 space-y-3">
           {items.map((item) => {
             const busy = busyId === item.item_id;
             const draft = stockDraft[item.item_id];
@@ -341,182 +399,233 @@ export default function VendorMenu() {
             const stockChanged =
               draft !== undefined && draft !== String(item.stock_qty);
             const isEditing = editingId === item.item_id;
+            const soldOut = item.is_sold_out || item.stock_qty === 0;
+            const low = !soldOut && item.stock_qty > 0 && item.stock_qty <= 3;
 
             return (
-              <div
+              <li
                 key={item.item_id}
-                className="bg-white rounded-xl border border-slate-200 p-4"
+                className="bg-white rounded-card border border-rice-200 p-4 sm:p-5"
               >
                 {isEditing ? (
-                  <div className="grid gap-3 sm:grid-cols-3">
-                    <div>
-                      <label className="text-xs text-slate-500">Name</label>
-                      <input
-                        className={inputClass}
-                        value={editForm.name}
-                        onChange={(e) =>
-                          setEditForm({ ...editForm, name: e.target.value })
-                        }
-                      />
-                    </div>
-                    <div>
-                      <label className="text-xs text-slate-500">Category</label>
-                      <input
-                        className={inputClass}
-                        value={editForm.category}
-                        onChange={(e) =>
-                          setEditForm({ ...editForm, category: e.target.value })
-                        }
-                      />
-                    </div>
-                    <div>
-                      <label className="text-xs text-slate-500">
-                        Price (₱)
-                      </label>
-                      <input
-                        type="number"
-                        min="0"
-                        step="0.01"
-                        className={inputClass}
-                        value={editForm.price}
-                        onChange={(e) =>
-                          setEditForm({ ...editForm, price: e.target.value })
-                        }
-                      />
-                    </div>
-                    <div className="sm:col-span-3">
-                      <label className="text-xs text-slate-500">
-                        Photo link (optional)
-                      </label>
-                      <input
-                        className={inputClass}
-                        value={editForm.image_url}
-                        onChange={(e) =>
-                          setEditForm({
-                            ...editForm,
-                            image_url: e.target.value,
-                          })
-                        }
-                        placeholder="https://… leave empty to remove the photo"
-                      />
-                    </div>
+                  <div className="grid gap-4 sm:grid-cols-3">
+                    <Field
+                      id={`edit-name-${item.item_id}`}
+                      label="Name"
+                      value={editForm.name}
+                      onChange={(e) =>
+                        setEditForm({ ...editForm, name: e.target.value })
+                      }
+                    />
+                    <Field
+                      id={`edit-category-${item.item_id}`}
+                      label="Category"
+                      value={editForm.category}
+                      onChange={(e) =>
+                        setEditForm({ ...editForm, category: e.target.value })
+                      }
+                    />
+                    <Field
+                      id={`edit-price-${item.item_id}`}
+                      label="Price (₱)"
+                      type="number"
+                      inputMode="decimal"
+                      min="0"
+                      step="0.01"
+                      value={editForm.price}
+                      onChange={(e) =>
+                        setEditForm({ ...editForm, price: e.target.value })
+                      }
+                    />
+                    <Field
+                      id={`edit-photo-${item.item_id}`}
+                      label="Photo link (optional)"
+                      className="sm:col-span-3"
+                      type="url"
+                      value={editForm.image_url}
+                      onChange={(e) =>
+                        setEditForm({ ...editForm, image_url: e.target.value })
+                      }
+                      placeholder="https://… leave empty to remove the photo"
+                    />
                     <div className="sm:col-span-3 flex gap-2">
                       <button
+                        type="button"
                         onClick={() => saveEdit(item)}
                         disabled={busy}
-                        className="bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 text-white text-sm font-medium rounded-lg px-4 py-2"
+                        className="bg-calamansi-500 hover:bg-calamansi-600 disabled:opacity-50 text-kape-900 text-sm font-semibold rounded-card px-5 py-2.5 transition-colors"
                       >
-                        Save
+                        {busy ? "Saving…" : "Save changes"}
                       </button>
                       <button
+                        type="button"
                         onClick={() => setEditingId(null)}
-                        className="text-sm text-slate-600 bg-white border border-slate-300 hover:bg-slate-50 rounded-lg px-4 py-2"
+                        className="text-sm font-semibold text-kape-900 bg-white border border-rice-200 hover:bg-rice-50 rounded-card px-5 py-2.5"
                       >
                         Cancel
                       </button>
                     </div>
                   </div>
                 ) : (
-                  <div className="flex items-start justify-between gap-2">
-                    <div className="flex items-start gap-3 min-w-0">
-                      {item.image_url && (
-                        <img
-                          src={item.image_url}
-                          alt=""
-                          loading="lazy"
-                          className="w-12 h-12 rounded-lg object-cover bg-slate-100 shrink-0"
-                        />
-                      )}
-                      <div className="min-w-0">
-                        <p className="font-semibold text-slate-800">
-                          {item.name}
+                  <>
+                    <div className="flex items-start gap-3">
+                      <ItemThumb
+                        src={item.image_url}
+                        name={item.name}
+                        muted={soldOut}
+                      />
+                      <div className="min-w-0 flex-1">
+                        <div className="flex items-start justify-between gap-2">
+                          <h2
+                            className={`font-display text-lg font-bold leading-tight truncate ${
+                              soldOut ? "text-kape-900/60" : "text-kape-900"
+                            }`}
+                          >
+                            {item.name}
+                          </h2>
+                          <StatusBadge item={item} />
+                        </div>
+                        <p className="text-sm text-kape-700 mt-0.5">
+                          {item.category || "Uncategorised"}
+                          <span className="mx-1.5 text-kape-700/40">/</span>
+                          <span className="tabular font-semibold text-kape-900">
+                            {peso(item.price)}
+                          </span>
                         </p>
-                        <p className="text-xs text-slate-500">
-                          {item.category || "Uncategorised"} · ₱
-                          {Number(item.price).toFixed(2)}
-                        </p>
+                        <button
+                          type="button"
+                          onClick={() => startEdit(item)}
+                          className="mt-1 text-sm font-semibold text-ube-700 hover:text-ube-900 hover:underline underline-offset-2 rounded"
+                        >
+                          Edit details
+                        </button>
                       </div>
                     </div>
-                    <div className="flex items-center gap-2 shrink-0">
-                      {badge(item)}
-                      <button
-                        onClick={() => startEdit(item)}
-                        className="text-xs text-emerald-700 font-medium hover:underline"
-                      >
-                        Edit
-                      </button>
-                    </div>
-                  </div>
-                )}
 
-                {!isEditing && (
-                  <div className="mt-4 flex flex-col sm:flex-row sm:items-center gap-3">
-                    <div className="flex items-center gap-2">
-                      <label className="text-sm text-slate-600">Stock</label>
-                      <input
-                        type="number"
-                        min="0"
-                        step="1"
-                        value={stockValue}
-                        onChange={(e) =>
-                          setStockDraft({
-                            ...stockDraft,
-                            [item.item_id]: e.target.value,
-                          })
-                        }
-                        className="w-24 border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500"
-                      />
-                      {stockChanged && (
-                        <button
-                          onClick={() => saveStock(item)}
-                          disabled={busy}
-                          className="bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 text-white text-sm font-medium rounded-lg px-3 py-2"
-                        >
-                          Save
-                        </button>
-                      )}
-                      {!stockChanged &&
-                        item.stock_qty > 0 &&
-                        item.stock_qty <= 3 && (
-                          <span className="text-xs text-amber-600">
+                    <div className="mt-4 pt-4 border-t border-dashed border-rice-200 flex flex-col sm:flex-row sm:items-center gap-3">
+                      <div className="flex items-center gap-3 flex-wrap">
+                        <span className="text-sm font-semibold text-kape-900">
+                          Stock
+                        </span>
+                        <div className="flex items-center">
+                          <button
+                            type="button"
+                            onClick={() => bumpStock(item, -1)}
+                            disabled={busy}
+                            aria-label={`One less ${item.name}`}
+                            className="h-11 w-11 rounded-l-card border border-rice-200 bg-white text-lg font-bold text-kape-900 hover:bg-rice-100 disabled:opacity-40"
+                          >
+                            −
+                          </button>
+                          <input
+                            type="number"
+                            inputMode="numeric"
+                            min="0"
+                            step="1"
+                            aria-label={`${item.name} stock`}
+                            value={stockValue}
+                            onChange={(e) =>
+                              setStockDraft({
+                                ...stockDraft,
+                                [item.item_id]: e.target.value,
+                              })
+                            }
+                            onKeyDown={(e) => {
+                              if (e.key === "Enter" && stockChanged)
+                                saveStock(item);
+                            }}
+                            className={`h-11 w-16 border-y border-rice-200 bg-rice-50 text-center text-base font-semibold text-kape-900 tabular focus:bg-white ${noSpinner}`}
+                          />
+                          <button
+                            type="button"
+                            onClick={() => bumpStock(item, 1)}
+                            disabled={busy}
+                            aria-label={`One more ${item.name}`}
+                            className="h-11 w-11 rounded-r-card border border-rice-200 bg-white text-lg font-bold text-kape-900 hover:bg-rice-100 disabled:opacity-40"
+                          >
+                            +
+                          </button>
+                        </div>
+
+                        {stockChanged && (
+                          <button
+                            type="button"
+                            onClick={() => saveStock(item)}
+                            disabled={busy}
+                            className="bg-calamansi-500 hover:bg-calamansi-600 disabled:opacity-50 text-kape-900 text-sm font-semibold rounded-card px-4 py-2.5 transition-colors"
+                          >
+                            {busy ? "Saving…" : "Save stock"}
+                          </button>
+                        )}
+
+                        {!stockChanged && low && (
+                          <span className="text-xs font-semibold text-calamansi-600">
                             Running low
                           </span>
                         )}
-                    </div>
+                      </div>
 
-                    <div className="sm:ml-auto">
-                      {item.is_sold_out ? (
-                        <button
-                          onClick={() => setSoldOut(item, false)}
-                          disabled={busy || item.stock_qty === 0}
-                          title={
-                            item.stock_qty === 0
-                              ? "Add stock first"
-                              : "Make this item orderable again"
-                          }
-                          className="w-full sm:w-auto text-sm font-medium text-emerald-700 border border-emerald-300 hover:bg-emerald-50 disabled:opacity-40 disabled:hover:bg-white rounded-lg px-4 py-2"
-                        >
-                          {item.stock_qty === 0
-                            ? "Add stock to reopen"
-                            : "Mark available"}
-                        </button>
-                      ) : (
-                        <button
-                          onClick={() => setSoldOut(item, true)}
-                          disabled={busy}
-                          className="w-full sm:w-auto text-sm font-medium text-red-600 border border-red-300 hover:bg-red-50 disabled:opacity-40 rounded-lg px-4 py-2"
-                        >
-                          Mark sold out
-                        </button>
-                      )}
+                      <div className="sm:ml-auto">
+                        {item.is_sold_out ? (
+                          <button
+                            type="button"
+                            onClick={() => setSoldOut(item, false)}
+                            disabled={busy || item.stock_qty === 0}
+                            title={
+                              item.stock_qty === 0
+                                ? "Add stock first"
+                                : "Make this item orderable again"
+                            }
+                            className="w-full sm:w-auto text-sm font-semibold text-dahon-700 bg-white border border-dahon-100 hover:bg-dahon-50 disabled:opacity-40 disabled:hover:bg-white rounded-card px-4 py-2.5 transition-colors"
+                          >
+                            {item.stock_qty === 0
+                              ? "Add stock to reopen"
+                              : "Mark available"}
+                          </button>
+                        ) : (
+                          <button
+                            type="button"
+                            onClick={() => setSoldOut(item, true)}
+                            disabled={busy}
+                            className="w-full sm:w-auto text-sm font-semibold text-sili-700 bg-white border border-sili-100 hover:bg-sili-50 disabled:opacity-40 rounded-card px-4 py-2.5 transition-colors"
+                          >
+                            Mark sold out
+                          </button>
+                        )}
+                      </div>
                     </div>
-                  </div>
+                  </>
                 )}
-              </div>
+              </li>
             );
           })}
-        </div>
+        </ul>
       </main>
+
+      {(error || notice) && (
+        <div className="fixed bottom-0 inset-x-0 z-20 px-4 pb-[max(1rem,env(safe-area-inset-bottom))] pointer-events-none">
+          <div
+            role={error ? "alert" : "status"}
+            className={`pointer-events-auto max-w-md mx-auto rounded-card px-4 py-3 text-sm shadow-lg flex items-start gap-3 ${
+              error
+                ? "bg-sili-50 border border-sili-100 text-sili-700"
+                : "bg-kape-900 text-rice-50"
+            }`}
+          >
+            <p className="flex-1">{error || notice}</p>
+            {error && (
+              <button
+                type="button"
+                onClick={() => setError("")}
+                aria-label="Dismiss"
+                className="font-bold leading-none px-1 rounded"
+              >
+                ✕
+              </button>
+            )}
+          </div>
+        </div>
+      )}
     </div>
   );
 }
