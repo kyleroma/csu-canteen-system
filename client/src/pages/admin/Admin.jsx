@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import api from "../../api/client";
 import { useAuth } from "../../context/AuthContext";
 
@@ -12,24 +12,182 @@ const EMPTY = {
 };
 
 const inputClass =
-  "w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500";
+  "w-full rounded-card border border-rice-200 bg-rice-50 px-3.5 py-2.5 text-base text-kape-900 placeholder:text-kape-700/40 focus:border-ube-600 focus:bg-white transition";
+
+const CHARS = "ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnpqrstuvwxyz23456789";
+
+const makePassword = () => {
+  const values = new Uint32Array(10);
+  crypto.getRandomValues(values);
+  return Array.from(values, (n) => CHARS[n % CHARS.length]).join("");
+};
+
+function Field({ id, label, className = "", children, ...props }) {
+  return (
+    <div className={className}>
+      <label
+        htmlFor={id}
+        className="block text-sm font-semibold text-kape-900 mb-1.5"
+      >
+        {label}
+      </label>
+      {children || <input id={id} className={inputClass} {...props} />}
+    </div>
+  );
+}
+
+function StallMark({ name, muted }) {
+  return (
+    <div
+      className={`w-12 h-12 rounded-[10px] grid place-items-center shrink-0 font-display text-xl font-extrabold ${
+        muted ? "bg-rice-100 text-kape-700/50" : "bg-ube-100 text-ube-700"
+      }`}
+      aria-hidden="true"
+    >
+      {(name || "?").trim().charAt(0).toUpperCase()}
+    </div>
+  );
+}
+
+function Stat({ label, value, highlight }) {
+  return (
+    <div
+      className={`px-4 py-3.5 ${highlight ? "bg-calamansi-50" : "bg-white"}`}
+    >
+      <p
+        className={`text-xs ${
+          highlight ? "text-calamansi-600 font-semibold" : "text-kape-700"
+        }`}
+      >
+        {label}
+      </p>
+      <p className="font-display text-2xl font-extrabold text-kape-900 tabular mt-0.5">
+        {value ?? 0}
+      </p>
+    </div>
+  );
+}
+
+function VendorRow({ vendor, busy, onVerify, onSetOpen }) {
+  const v = vendor;
+
+  return (
+    <li className="bg-white rounded-card border border-rice-200 p-4 sm:p-5">
+      <div className="flex items-start gap-3">
+        <StallMark name={v.stall_name} muted={!v.is_open} />
+        <div className="min-w-0 flex-1">
+          <div className="flex items-start justify-between gap-2">
+            <h3 className="font-display text-lg font-bold leading-tight text-kape-900 truncate">
+              {v.stall_name}
+            </h3>
+            <div className="flex items-center gap-1.5 shrink-0">
+              {!v.is_verified && (
+                <span className="text-xs font-semibold bg-calamansi-50 text-calamansi-600 px-2.5 py-1 rounded-full">
+                  Unverified
+                </span>
+              )}
+              <span
+                className={`flex items-center gap-1.5 text-xs font-semibold px-2.5 py-1 rounded-full ${
+                  v.is_open
+                    ? "bg-dahon-50 text-dahon-700"
+                    : "bg-sili-50 text-sili-700"
+                }`}
+              >
+                <span
+                  className={`w-1.5 h-1.5 rounded-full ${
+                    v.is_open ? "bg-dahon-600" : "bg-sili-600"
+                  }`}
+                  aria-hidden="true"
+                />
+                {v.is_open ? "Open" : "Closed"}
+              </span>
+            </div>
+          </div>
+          <p className="text-sm text-kape-700 truncate">
+            {v.location || "No location set"}
+          </p>
+        </div>
+      </div>
+
+      <dl className="mt-4 pt-3 border-t border-dashed border-rice-200 grid gap-x-6 gap-y-1.5 sm:grid-cols-3 text-sm">
+        <div className="min-w-0">
+          <dt className="text-xs text-kape-700/70">Owner</dt>
+          <dd className="text-kape-900 truncate">{v.User?.full_name || "—"}</dd>
+        </div>
+        <div className="min-w-0">
+          <dt className="text-xs text-kape-700/70">Login email</dt>
+          <dd className="text-kape-900 truncate">{v.User?.email || "—"}</dd>
+        </div>
+        <div className="min-w-0">
+          <dt className="text-xs text-kape-700/70">Contact</dt>
+          <dd className="truncate">
+            {v.User?.phone ? (
+              <a
+                href={`tel:${v.User.phone}`}
+                className="text-ube-700 font-semibold hover:underline underline-offset-2 rounded"
+              >
+                {v.User.phone}
+              </a>
+            ) : (
+              <span className="text-kape-700/60">Not given</span>
+            )}
+          </dd>
+        </div>
+      </dl>
+
+      <div className="mt-4 flex flex-col sm:flex-row gap-2 sm:justify-end">
+        {!v.is_verified && (
+          <button
+            type="button"
+            onClick={() => onVerify(v)}
+            disabled={busy}
+            className="text-sm font-semibold text-kape-900 bg-calamansi-500 hover:bg-calamansi-600 disabled:opacity-50 rounded-card px-5 py-2.5 transition-colors"
+          >
+            {busy ? "Saving…" : "Verify stall"}
+          </button>
+        )}
+        {v.is_open ? (
+          <button
+            type="button"
+            onClick={() => onSetOpen(v, false)}
+            disabled={busy}
+            className="text-sm font-semibold text-sili-700 bg-white border border-sili-100 hover:bg-sili-50 disabled:opacity-40 rounded-card px-5 py-2.5 transition-colors"
+          >
+            Close stall
+          </button>
+        ) : (
+          <button
+            type="button"
+            onClick={() => onSetOpen(v, true)}
+            disabled={busy}
+            className="text-sm font-semibold text-dahon-700 bg-white border border-dahon-100 hover:bg-dahon-50 disabled:opacity-40 rounded-card px-5 py-2.5 transition-colors"
+          >
+            Open stall
+          </button>
+        )}
+      </div>
+    </li>
+  );
+}
 
 export default function AdminPanel() {
   const [stats, setStats] = useState(null);
   const [vendors, setVendors] = useState([]);
   const [form, setForm] = useState(EMPTY);
   const [showForm, setShowForm] = useState(false);
+  const [created, setCreated] = useState(null);
   const [busyId, setBusyId] = useState(null);
   const [saving, setSaving] = useState(false);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
 
+  const noticeTimer = useRef(null);
   const { logout } = useAuth();
 
   const load = () => {
     setLoading(true);
-    Promise.all([api.get("/admin/overview"), api.get("/admin/vendors")])
+    return Promise.all([api.get("/admin/overview"), api.get("/admin/vendors")])
       .then(([o, v]) => {
         setStats(o.data);
         setVendors(v.data.vendors);
@@ -43,15 +201,20 @@ export default function AdminPanel() {
 
   useEffect(() => {
     load();
+    return () => clearTimeout(noticeTimer.current);
   }, []);
 
   const flash = (message) => {
+    clearTimeout(noticeTimer.current);
     setNotice(message);
-    setTimeout(() => setNotice(""), 3000);
+    noticeTimer.current = setTimeout(() => setNotice(""), 3000);
   };
+
+  const set = (key) => (e) => setForm({ ...form, [key]: e.target.value });
 
   const onboard = async (e) => {
     e.preventDefault();
+    if (saving) return;
     setError("");
 
     if (!form.email || !form.password || !form.full_name || !form.stall_name) {
@@ -73,14 +236,31 @@ export default function AdminPanel() {
         stall_name: form.stall_name.trim(),
         location: form.location.trim() || null,
       });
-      flash(data.message);
+      setCreated({
+        stall: form.stall_name.trim(),
+        email: form.email.trim(),
+        password: form.password,
+      });
+      flash(data.message || "Stall created.");
       setForm(EMPTY);
       setShowForm(false);
-      load();
+      await load();
     } catch (err) {
       setError(err.response?.data?.message || "Could not create the stall.");
     } finally {
       setSaving(false);
+    }
+  };
+
+  const copyCredentials = async () => {
+    if (!created) return;
+    try {
+      await navigator.clipboard.writeText(
+        `CSU Canteen vendor login\nStall: ${created.stall}\nEmail: ${created.email}\nPassword: ${created.password}\nSign in at ${window.location.origin}/login`,
+      );
+      flash("Login details copied.");
+    } catch {
+      setError("Could not copy. Write the details down instead.");
     }
   };
 
@@ -91,8 +271,8 @@ export default function AdminPanel() {
       const { data } = await api.patch(
         `/admin/vendors/${vendor.vendor_id}/verify`,
       );
-      flash(data.message);
-      load();
+      flash(data.message || `${vendor.stall_name} verified.`);
+      await load();
     } catch (err) {
       setError(err.response?.data?.message || "Could not verify the stall.");
     } finally {
@@ -108,8 +288,11 @@ export default function AdminPanel() {
         `/admin/vendors/${vendor.vendor_id}/status`,
         { is_open: value },
       );
-      flash(data.message);
-      load();
+      flash(
+        data.message ||
+          `${vendor.stall_name} is now ${value ? "open" : "closed"}.`,
+      );
+      await load();
     } catch (err) {
       setError(err.response?.data?.message || "Could not update the stall.");
     } finally {
@@ -117,39 +300,40 @@ export default function AdminPanel() {
     }
   };
 
-  const card = (label, value, accent) => (
-    <div className="bg-white rounded-xl border border-slate-200 p-4">
-      <p className="text-xs text-slate-500">{label}</p>
-      <p
-        className={`text-2xl font-semibold mt-1 ${
-          accent ? "text-amber-600" : "text-slate-800"
-        }`}
-      >
-        {value}
-      </p>
-    </div>
-  );
+  const pending = vendors.filter((v) => !v.is_verified);
+  const verified = vendors.filter((v) => v.is_verified);
+
+  const rowProps = (v) => ({
+    vendor: v,
+    busy: busyId === v.vendor_id,
+    onVerify: verify,
+    onSetOpen: setOpen,
+  });
 
   return (
-    <div className="min-h-screen bg-slate-100">
-      <header className="bg-white border-b border-slate-200 sticky top-0 z-10">
-        <div className="max-w-5xl mx-auto px-4 py-3 flex items-center justify-between">
-          <div>
-            <h1 className="font-bold text-emerald-700 leading-tight">
-              CSU Canteen — Admin
-            </h1>
-            <p className="text-xs text-slate-500">Stalls and verification</p>
+    <div className="min-h-screen bg-rice-50">
+      <header className="bg-rice-50/95 backdrop-blur border-b border-rice-200 sticky top-0 z-10">
+        <div className="max-w-5xl mx-auto px-4 py-3 flex items-center justify-between gap-4">
+          <div className="min-w-0">
+            <p className="font-display text-xs font-bold text-ube-700">
+              CSU Canteen
+            </p>
+            <p className="font-display text-lg font-extrabold leading-tight text-kape-900">
+              Admin
+            </p>
           </div>
-          <div className="flex items-center gap-4">
+          <div className="flex items-center gap-4 shrink-0">
             <button
+              type="button"
               onClick={load}
-              className="text-sm text-slate-600 hover:text-slate-900"
+              className="text-sm font-semibold text-ube-700 hover:text-ube-900 rounded"
             >
               Refresh
             </button>
             <button
+              type="button"
               onClick={logout}
-              className="text-sm text-slate-500 hover:text-slate-800"
+              className="text-sm text-kape-700 hover:text-kape-900 rounded"
             >
               Sign out
             </button>
@@ -157,37 +341,92 @@ export default function AdminPanel() {
         </div>
       </header>
 
-      <main className="max-w-5xl mx-auto px-4 py-6">
+      <main className="max-w-5xl mx-auto px-4 py-6 pb-28">
+        <h1 className="font-display text-[28px] leading-tight font-extrabold text-kape-900">
+          Stalls and verification
+        </h1>
+        <p className="text-sm text-kape-700 mt-1">
+          New stalls stay hidden from students until you verify them.
+        </p>
+
         {stats && (
-          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-6">
-            {card("Users", stats.total_users)}
-            {card("Stalls", stats.total_stalls)}
-            {card("Awaiting verification", stats.unverified_stalls, true)}
-            {card("Orders placed", stats.total_orders)}
+          <section
+            aria-label="Overview"
+            className="mt-6 grid grid-cols-2 sm:grid-cols-4 gap-px bg-rice-200 border border-rice-200 rounded-card overflow-hidden"
+          >
+            <Stat label="Users" value={stats.total_users} />
+            <Stat label="Stalls" value={stats.total_stalls} />
+            <Stat
+              label="Awaiting verification"
+              value={stats.unverified_stalls}
+              highlight={stats.unverified_stalls > 0}
+            />
+            <Stat label="Orders placed" value={stats.total_orders} />
+          </section>
+        )}
+
+        {created && (
+          <div className="mt-6 bg-dahon-50 border border-dahon-100 rounded-card p-4 sm:p-5">
+            <p className="text-sm font-semibold text-dahon-700">
+              {created.stall} was created. Give these login details to the
+              vendor.
+            </p>
+            <dl className="mt-3 grid gap-2 sm:grid-cols-2 text-sm">
+              <div className="bg-white rounded-card border border-dahon-100 px-3.5 py-2.5 min-w-0">
+                <dt className="text-xs text-kape-700/70">Email</dt>
+                <dd className="font-semibold text-kape-900 truncate">
+                  {created.email}
+                </dd>
+              </div>
+              <div className="bg-white rounded-card border border-dahon-100 px-3.5 py-2.5">
+                <dt className="text-xs text-kape-700/70">Password</dt>
+                <dd className="font-semibold text-kape-900 tabular tracking-wide">
+                  {created.password}
+                </dd>
+              </div>
+            </dl>
+            <p className="text-xs text-dahon-700 mt-2">
+              This password is shown only once. The stall still needs to be
+              verified below.
+            </p>
+            <div className="mt-3 flex gap-2">
+              <button
+                type="button"
+                onClick={copyCredentials}
+                className="text-sm font-semibold text-white bg-dahon-600 hover:bg-dahon-700 rounded-card px-4 py-2.5 transition-colors"
+              >
+                Copy details
+              </button>
+              <button
+                type="button"
+                onClick={() => setCreated(null)}
+                className="text-sm font-semibold text-kape-900 bg-white border border-rice-200 hover:bg-rice-50 rounded-card px-4 py-2.5"
+              >
+                Done
+              </button>
+            </div>
           </div>
         )}
 
-        {error && (
-          <p className="text-sm text-red-600 bg-red-50 border border-red-200 rounded-lg px-3 py-2 mb-4">
-            {error}
-          </p>
-        )}
-        {notice && (
-          <p className="text-sm text-emerald-700 bg-emerald-50 border border-emerald-200 rounded-lg px-3 py-2 mb-4">
-            {notice}
-          </p>
-        )}
-
-        <div className="flex items-center justify-between mb-3">
-          <h2 className="font-semibold text-slate-700">
+        <div className="mt-8 flex items-end justify-between gap-4">
+          <h2 className="font-display text-xl font-bold text-kape-900">
             Stalls{" "}
-            <span className="text-slate-400 font-normal">
+            <span className="text-base font-normal text-kape-700 tabular">
               ({vendors.length})
             </span>
           </h2>
           <button
-            onClick={() => setShowForm((v) => !v)}
-            className="text-sm text-white bg-emerald-600 hover:bg-emerald-700 font-medium rounded-lg px-3 py-2"
+            type="button"
+            onClick={() => {
+              setShowForm((s) => !s);
+              setError("");
+            }}
+            aria-expanded={showForm}
+            className={`shrink-0 text-sm font-semibold rounded-card px-4 py-2.5 transition-colors ${
+              showForm
+                ? "text-kape-900 bg-white border border-rice-200 hover:bg-rice-100"
+                : "text-kape-900 bg-calamansi-500 hover:bg-calamansi-600"
+            }`}
           >
             {showForm ? "Close" : "+ Onboard a stall"}
           </button>
@@ -196,176 +435,184 @@ export default function AdminPanel() {
         {showForm && (
           <form
             onSubmit={onboard}
-            className="bg-white rounded-xl border border-slate-200 p-4 mb-5"
+            className="mt-4 bg-white rounded-card border border-rice-200 p-5"
+            autoComplete="off"
           >
-            <p className="text-xs text-slate-500 mb-4">
-              Creates the vendor&apos;s login and their stall together. The
-              stall stays hidden from students until you verify it.
+            <p className="text-sm text-kape-700">
+              Creates the vendor&apos;s login and their stall together.
             </p>
 
-            <div className="grid gap-3 sm:grid-cols-2">
-              <div>
-                <label className="text-xs text-slate-500">Stall name</label>
-                <input
-                  className={inputClass}
-                  value={form.stall_name}
-                  onChange={(e) =>
-                    setForm({ ...form, stall_name: e.target.value })
-                  }
-                  placeholder="e.g. Tess Lutong Bahay"
-                />
-              </div>
-              <div>
-                <label className="text-xs text-slate-500">Location</label>
-                <input
-                  className={inputClass}
-                  value={form.location}
-                  onChange={(e) =>
-                    setForm({ ...form, location: e.target.value })
-                  }
-                  placeholder="e.g. Main Canteen, Stall 7"
-                />
-              </div>
-              <div>
-                <label className="text-xs text-slate-500">Owner name</label>
-                <input
-                  className={inputClass}
-                  value={form.full_name}
-                  onChange={(e) =>
-                    setForm({ ...form, full_name: e.target.value })
-                  }
-                  placeholder="e.g. Aling Tess"
-                />
-              </div>
-              <div>
-                <label className="text-xs text-slate-500">
-                  Contact number (optional)
-                </label>
-                <input
-                  className={inputClass}
-                  value={form.phone}
-                  onChange={(e) => setForm({ ...form, phone: e.target.value })}
-                  placeholder="09XXXXXXXXX"
-                />
-              </div>
-              <div>
-                <label className="text-xs text-slate-500">Login email</label>
-                <input
-                  type="email"
-                  className={inputClass}
-                  value={form.email}
-                  onChange={(e) => setForm({ ...form, email: e.target.value })}
-                  placeholder="vendors may use a personal email"
-                />
-              </div>
-              <div>
-                <label className="text-xs text-slate-500">
-                  Temporary password (min 8 characters)
-                </label>
-                <input
-                  type="text"
-                  className={inputClass}
-                  value={form.password}
-                  onChange={(e) =>
-                    setForm({ ...form, password: e.target.value })
-                  }
-                  placeholder="give this to the vendor"
-                />
-              </div>
-              <div className="sm:col-span-2">
-                <button
-                  type="submit"
-                  disabled={saving}
-                  className="w-full sm:w-auto bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 text-white text-sm font-medium rounded-lg px-5 py-2"
-                >
-                  {saving ? "Creating…" : "Create stall"}
-                </button>
-              </div>
+            <h3 className="mt-5 font-display text-base font-bold text-kape-900">
+              Stall
+            </h3>
+            <div className="mt-3 grid gap-4 sm:grid-cols-2">
+              <Field
+                id="stall-name"
+                label="Stall name"
+                value={form.stall_name}
+                onChange={set("stall_name")}
+                placeholder="e.g. Tess Lutong Bahay"
+              />
+              <Field
+                id="stall-location"
+                label="Location"
+                value={form.location}
+                onChange={set("location")}
+                placeholder="e.g. Main Canteen, Stall 7"
+              />
+            </div>
+
+            <h3 className="mt-6 font-display text-base font-bold text-kape-900">
+              Owner and login
+            </h3>
+            <div className="mt-3 grid gap-4 sm:grid-cols-2">
+              <Field
+                id="owner-name"
+                label="Owner name"
+                value={form.full_name}
+                onChange={set("full_name")}
+                placeholder="e.g. Aling Tess"
+              />
+              <Field
+                id="owner-phone"
+                label="Contact number (optional)"
+                type="tel"
+                inputMode="tel"
+                value={form.phone}
+                onChange={set("phone")}
+                placeholder="09XXXXXXXXX"
+              />
+              <Field
+                id="owner-email"
+                label="Login email"
+                type="email"
+                value={form.email}
+                onChange={set("email")}
+                placeholder="A personal email is fine"
+              />
+              <Field id="owner-password" label="Temporary password">
+                <div className="flex gap-2">
+                  <input
+                    id="owner-password"
+                    type="text"
+                    autoComplete="new-password"
+                    spellCheck={false}
+                    className={`${inputClass} tabular tracking-wide`}
+                    value={form.password}
+                    onChange={set("password")}
+                    placeholder="At least 8 characters"
+                  />
+                  <button
+                    type="button"
+                    onClick={() =>
+                      setForm({ ...form, password: makePassword() })
+                    }
+                    className="shrink-0 text-sm font-semibold text-ube-700 bg-white border border-rice-200 hover:bg-rice-100 rounded-card px-3.5"
+                  >
+                    Generate
+                  </button>
+                </div>
+              </Field>
+            </div>
+
+            <div className="mt-6">
+              <button
+                type="submit"
+                disabled={saving}
+                className="w-full sm:w-auto bg-calamansi-500 hover:bg-calamansi-600 disabled:bg-rice-100 disabled:text-kape-700/50 text-kape-900 text-sm font-semibold rounded-card px-6 py-3 transition-colors"
+              >
+                {saving ? "Creating…" : "Create stall"}
+              </button>
             </div>
           </form>
         )}
 
-        {loading && <p className="text-slate-400 text-sm">Loading…</p>}
-
-        {!loading && vendors.length === 0 && (
-          <p className="text-sm text-slate-400 bg-white border border-dashed border-slate-200 rounded-xl p-6 text-center">
-            No stalls yet. Onboard the first one above.
-          </p>
+        {loading && vendors.length === 0 && (
+          <p className="text-kape-700/60 text-sm mt-8">Loading stalls…</p>
         )}
 
-        <div className="space-y-3">
-          {vendors.map((v) => {
-            const busy = busyId === v.vendor_id;
-            return (
-              <div
-                key={v.vendor_id}
-                className="bg-white rounded-xl border border-slate-200 p-4 flex flex-col sm:flex-row sm:items-center gap-3"
-              >
-                <div className="min-w-0 sm:w-72">
-                  <p className="font-semibold text-slate-800">{v.stall_name}</p>
-                  <p className="text-xs text-slate-500 truncate">
-                    {v.location || "No location set"}
-                  </p>
-                  <p className="text-xs text-slate-500 truncate mt-1">
-                    {v.User?.full_name} · {v.User?.email}
-                    {v.User?.phone ? ` · ${v.User.phone}` : ""}
-                  </p>
-                </div>
+        {!loading && vendors.length === 0 && (
+          <div className="mt-6 border border-dashed border-rice-200 rounded-card px-5 py-10 text-center">
+            <p className="font-display text-lg font-bold text-kape-900">
+              No stalls yet
+            </p>
+            <p className="text-sm text-kape-700 mt-1">
+              Onboard the first stall to get started.
+            </p>
+          </div>
+        )}
 
-                <div className="flex items-center gap-2">
-                  <span
-                    className={`text-xs font-medium px-2 py-0.5 rounded-full ${
-                      v.is_verified
-                        ? "bg-emerald-100 text-emerald-700"
-                        : "bg-amber-100 text-amber-700"
-                    }`}
-                  >
-                    {v.is_verified ? "Verified" : "Unverified"}
-                  </span>
-                  <span
-                    className={`text-xs font-medium px-2 py-0.5 rounded-full ${
-                      v.is_open
-                        ? "bg-slate-100 text-slate-700"
-                        : "bg-red-100 text-red-700"
-                    }`}
-                  >
-                    {v.is_open ? "Open" : "Closed"}
-                  </span>
-                </div>
+        {pending.length > 0 && (
+          <section className="mt-6" aria-labelledby="pending-heading">
+            <h3
+              id="pending-heading"
+              className="flex items-center gap-2 font-display text-base font-bold text-kape-900 mb-3"
+            >
+              <span
+                className="w-2.5 h-2.5 rounded-full bg-calamansi-500"
+                aria-hidden="true"
+              />
+              Waiting for verification
+              <span className="text-sm font-normal text-kape-700 tabular">
+                ({pending.length})
+              </span>
+            </h3>
+            <ul className="space-y-3">
+              {pending.map((v) => (
+                <VendorRow key={v.vendor_id} {...rowProps(v)} />
+              ))}
+            </ul>
+          </section>
+        )}
 
-                <div className="flex items-center gap-2 sm:ml-auto">
-                  {!v.is_verified && (
-                    <button
-                      onClick={() => verify(v)}
-                      disabled={busy}
-                      className="text-sm font-medium text-white bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 rounded-lg px-4 py-2"
-                    >
-                      Verify
-                    </button>
-                  )}
-                  {v.is_open ? (
-                    <button
-                      onClick={() => setOpen(v, false)}
-                      disabled={busy}
-                      className="text-sm font-medium text-red-600 border border-red-300 hover:bg-red-50 disabled:opacity-40 rounded-lg px-4 py-2"
-                    >
-                      Close stall
-                    </button>
-                  ) : (
-                    <button
-                      onClick={() => setOpen(v, true)}
-                      disabled={busy}
-                      className="text-sm font-medium text-emerald-700 border border-emerald-300 hover:bg-emerald-50 disabled:opacity-40 rounded-lg px-4 py-2"
-                    >
-                      Open stall
-                    </button>
-                  )}
-                </div>
-              </div>
-            );
-          })}
-        </div>
+        {verified.length > 0 && (
+          <section className="mt-8" aria-labelledby="verified-heading">
+            <h3
+              id="verified-heading"
+              className="flex items-center gap-2 font-display text-base font-bold text-kape-900 mb-3"
+            >
+              <span
+                className="w-2.5 h-2.5 rounded-full bg-dahon-600"
+                aria-hidden="true"
+              />
+              Verified
+              <span className="text-sm font-normal text-kape-700 tabular">
+                ({verified.length})
+              </span>
+            </h3>
+            <ul className="space-y-3">
+              {verified.map((v) => (
+                <VendorRow key={v.vendor_id} {...rowProps(v)} />
+              ))}
+            </ul>
+          </section>
+        )}
       </main>
+
+      {(error || notice) && (
+        <div className="fixed bottom-0 inset-x-0 z-20 px-4 pb-[max(1rem,env(safe-area-inset-bottom))] pointer-events-none">
+          <div
+            role={error ? "alert" : "status"}
+            className={`pointer-events-auto max-w-md mx-auto rounded-card px-4 py-3 text-sm shadow-lg flex items-start gap-3 ${
+              error
+                ? "bg-sili-50 border border-sili-100 text-sili-700"
+                : "bg-kape-900 text-rice-50"
+            }`}
+          >
+            <p className="flex-1">{error || notice}</p>
+            {error && (
+              <button
+                type="button"
+                onClick={() => setError("")}
+                aria-label="Dismiss"
+                className="font-bold leading-none px-1 rounded"
+              >
+                ✕
+              </button>
+            )}
+          </div>
+        </div>
+      )}
     </div>
   );
 }
