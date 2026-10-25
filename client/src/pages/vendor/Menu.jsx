@@ -257,349 +257,356 @@ export default function VendorMenu() {
     <div className="min-h-screen bg-rice-50">
       <VendorHeader stall={stall} />
 
-      <main className="max-w-4xl mx-auto px-4 py-6 pb-28">
-        <div className="flex items-end justify-between gap-4">
-          <div>
-            <h1 className="font-display text-[28px] leading-tight font-extrabold text-kape-900">
-              Menu & stock
-            </h1>
-            <p className="text-sm text-kape-700 mt-1">
-              <span className="tabular">{items.length}</span>{" "}
-              {items.length === 1 ? "item" : "items"}
-              {soldOutCount > 0 && (
-                <>
-                  ,{" "}
-                  <span className="text-sili-700 font-semibold tabular">
-                    {soldOutCount} sold out
-                  </span>
-                </>
-              )}
-            </p>
-          </div>
-          <div className="flex items-center gap-2 shrink-0">
-            <button
-              type="button"
-              onClick={load}
-              className="text-sm font-semibold text-kape-900 bg-white border border-rice-200 hover:bg-rice-100 rounded-card px-3.5 py-2.5"
-            >
-              Refresh
-            </button>
-            <button
-              type="button"
-              onClick={() => {
-                setShowAdd((v) => !v);
-                setError("");
-              }}
-              aria-expanded={showAdd}
-              className={`text-sm font-semibold rounded-card px-4 py-2.5 transition-colors ${
-                showAdd
-                  ? "text-kape-900 bg-white border border-rice-200 hover:bg-rice-100"
-                  : "text-kape-900 bg-calamansi-500 hover:bg-calamansi-600"
-              }`}
-            >
-              {showAdd ? "Close" : "+ Add item"}
-            </button>
-          </div>
-        </div>
-
-        {showAdd && (
-          <form
-            onSubmit={addItem}
-            className="mt-5 bg-white rounded-card border border-rice-200 p-5 grid gap-4 sm:grid-cols-2"
-          >
-            <h2 className="sm:col-span-2 font-display text-base font-bold text-kape-900">
-              New item
-            </h2>
-            <Field
-              id="new-name"
-              label="Name"
-              className="sm:col-span-2"
-              value={newItem.name}
-              onChange={(e) => setNewItem({ ...newItem, name: e.target.value })}
-              placeholder="e.g. Chicken Adobo"
-            />
-            <Field
-              id="new-category"
-              label="Category"
-              value={newItem.category}
-              onChange={(e) =>
-                setNewItem({ ...newItem, category: e.target.value })
-              }
-              placeholder="e.g. Rice meals"
-            />
-            <Field
-              id="new-price"
-              label="Price (₱)"
-              type="number"
-              inputMode="decimal"
-              min="0"
-              step="0.01"
-              value={newItem.price}
-              onChange={(e) =>
-                setNewItem({ ...newItem, price: e.target.value })
-              }
-              placeholder="0.00"
-            />
-            <Field
-              id="new-stock"
-              label="Starting stock"
-              type="number"
-              inputMode="numeric"
-              min="0"
-              step="1"
-              value={newItem.stock_qty}
-              onChange={(e) =>
-                setNewItem({ ...newItem, stock_qty: e.target.value })
-              }
-              placeholder="0"
-            />
-            <Field
-              id="new-photo"
-              label="Photo link (optional)"
-              className="sm:col-span-2"
-              type="url"
-              value={newItem.image_url}
-              onChange={(e) =>
-                setNewItem({ ...newItem, image_url: e.target.value })
-              }
-              placeholder="https://… a link to a photo of this dish"
-            />
-            <div className="sm:col-span-2">
+      <main className="max-w-6xl mx-auto px-4 py-6 pb-28">
+        <div className="max-w-4xl">
+          <div className="flex items-end justify-between gap-4">
+            <div>
+              <h1 className="font-display text-[28px] leading-tight font-extrabold text-kape-900">
+                Menu & stock
+              </h1>
+              <p className="text-sm text-kape-700 mt-1">
+                <span className="tabular">{items.length}</span>{" "}
+                {items.length === 1 ? "item" : "items"}
+                {soldOutCount > 0 && (
+                  <>
+                    ,{" "}
+                    <span className="text-sili-700 font-semibold tabular">
+                      {soldOutCount} sold out
+                    </span>
+                  </>
+                )}
+              </p>
+            </div>
+            <div className="flex items-center gap-2 shrink-0">
               <button
-                type="submit"
-                disabled={adding}
-                className="w-full sm:w-auto bg-calamansi-500 hover:bg-calamansi-600 disabled:bg-rice-100 disabled:text-kape-700/50 text-kape-900 text-sm font-semibold rounded-card px-6 py-3 transition-colors"
+                type="button"
+                onClick={load}
+                className="text-sm font-semibold text-kape-900 bg-white border border-rice-200 hover:bg-rice-100 rounded-card px-3.5 py-2.5"
               >
-                {adding ? "Saving…" : "Save item"}
+                Refresh
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setShowAdd((v) => !v);
+                  setError("");
+                }}
+                aria-expanded={showAdd}
+                className={`text-sm font-semibold rounded-card px-4 py-2.5 transition-colors ${
+                  showAdd
+                    ? "text-kape-900 bg-white border border-rice-200 hover:bg-rice-100"
+                    : "text-kape-900 bg-calamansi-500 hover:bg-calamansi-600"
+                }`}
+              >
+                {showAdd ? "Close" : "+ Add item"}
               </button>
             </div>
-          </form>
-        )}
-
-        {loading && items.length === 0 && (
-          <p className="text-kape-700/60 text-sm mt-8">Loading menu…</p>
-        )}
-
-        {!loading && items.length === 0 && (
-          <div className="mt-8 border border-dashed border-rice-200 rounded-card px-5 py-10 text-center">
-            <p className="font-display text-lg font-bold text-kape-900">
-              Your menu is empty
-            </p>
-            <p className="text-sm text-kape-700 mt-1">
-              Add your first dish so students can start ordering.
-            </p>
           </div>
-        )}
 
-        <ul className="mt-6 space-y-3">
-          {items.map((item) => {
-            const busy = busyId === item.item_id;
-            const draft = stockDraft[item.item_id];
-            const stockValue = draft ?? String(item.stock_qty);
-            const stockChanged =
-              draft !== undefined && draft !== String(item.stock_qty);
-            const isEditing = editingId === item.item_id;
-            const soldOut = item.is_sold_out || item.stock_qty === 0;
-            const low = !soldOut && item.stock_qty > 0 && item.stock_qty <= 3;
+          {showAdd && (
+            <form
+              onSubmit={addItem}
+              className="mt-5 bg-white rounded-card border border-rice-200 p-5 grid gap-4 sm:grid-cols-2"
+            >
+              <h2 className="sm:col-span-2 font-display text-base font-bold text-kape-900">
+                New item
+              </h2>
+              <Field
+                id="new-name"
+                label="Name"
+                className="sm:col-span-2"
+                value={newItem.name}
+                onChange={(e) =>
+                  setNewItem({ ...newItem, name: e.target.value })
+                }
+                placeholder="e.g. Chicken Adobo"
+              />
+              <Field
+                id="new-category"
+                label="Category"
+                value={newItem.category}
+                onChange={(e) =>
+                  setNewItem({ ...newItem, category: e.target.value })
+                }
+                placeholder="e.g. Rice meals"
+              />
+              <Field
+                id="new-price"
+                label="Price (₱)"
+                type="number"
+                inputMode="decimal"
+                min="0"
+                step="0.01"
+                value={newItem.price}
+                onChange={(e) =>
+                  setNewItem({ ...newItem, price: e.target.value })
+                }
+                placeholder="0.00"
+              />
+              <Field
+                id="new-stock"
+                label="Starting stock"
+                type="number"
+                inputMode="numeric"
+                min="0"
+                step="1"
+                value={newItem.stock_qty}
+                onChange={(e) =>
+                  setNewItem({ ...newItem, stock_qty: e.target.value })
+                }
+                placeholder="0"
+              />
+              <Field
+                id="new-photo"
+                label="Photo link (optional)"
+                className="sm:col-span-2"
+                type="url"
+                value={newItem.image_url}
+                onChange={(e) =>
+                  setNewItem({ ...newItem, image_url: e.target.value })
+                }
+                placeholder="https://… a link to a photo of this dish"
+              />
+              <div className="sm:col-span-2">
+                <button
+                  type="submit"
+                  disabled={adding}
+                  className="w-full sm:w-auto bg-calamansi-500 hover:bg-calamansi-600 disabled:bg-rice-100 disabled:text-kape-700/50 text-kape-900 text-sm font-semibold rounded-card px-6 py-3 transition-colors"
+                >
+                  {adding ? "Saving…" : "Save item"}
+                </button>
+              </div>
+            </form>
+          )}
 
-            return (
-              <li
-                key={item.item_id}
-                className="bg-white rounded-card border border-rice-200 p-4 sm:p-5"
-              >
-                {isEditing ? (
-                  <div className="grid gap-4 sm:grid-cols-3">
-                    <Field
-                      id={`edit-name-${item.item_id}`}
-                      label="Name"
-                      value={editForm.name}
-                      onChange={(e) =>
-                        setEditForm({ ...editForm, name: e.target.value })
-                      }
-                    />
-                    <Field
-                      id={`edit-category-${item.item_id}`}
-                      label="Category"
-                      value={editForm.category}
-                      onChange={(e) =>
-                        setEditForm({ ...editForm, category: e.target.value })
-                      }
-                    />
-                    <Field
-                      id={`edit-price-${item.item_id}`}
-                      label="Price (₱)"
-                      type="number"
-                      inputMode="decimal"
-                      min="0"
-                      step="0.01"
-                      value={editForm.price}
-                      onChange={(e) =>
-                        setEditForm({ ...editForm, price: e.target.value })
-                      }
-                    />
-                    <Field
-                      id={`edit-photo-${item.item_id}`}
-                      label="Photo link (optional)"
-                      className="sm:col-span-3"
-                      type="url"
-                      value={editForm.image_url}
-                      onChange={(e) =>
-                        setEditForm({ ...editForm, image_url: e.target.value })
-                      }
-                      placeholder="https://… leave empty to remove the photo"
-                    />
-                    <div className="sm:col-span-3 flex gap-2">
-                      <button
-                        type="button"
-                        onClick={() => saveEdit(item)}
-                        disabled={busy}
-                        className="bg-calamansi-500 hover:bg-calamansi-600 disabled:opacity-50 text-kape-900 text-sm font-semibold rounded-card px-5 py-2.5 transition-colors"
-                      >
-                        {busy ? "Saving…" : "Save changes"}
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => setEditingId(null)}
-                        className="text-sm font-semibold text-kape-900 bg-white border border-rice-200 hover:bg-rice-50 rounded-card px-5 py-2.5"
-                      >
-                        Cancel
-                      </button>
-                    </div>
-                  </div>
-                ) : (
-                  <>
-                    <div className="flex items-start gap-3">
-                      <ItemThumb
-                        src={item.image_url}
-                        name={item.name}
-                        muted={soldOut}
+          {loading && items.length === 0 && (
+            <p className="text-kape-700/60 text-sm mt-8">Loading menu…</p>
+          )}
+
+          {!loading && items.length === 0 && (
+            <div className="mt-8 border border-dashed border-rice-200 rounded-card px-5 py-10 text-center">
+              <p className="font-display text-lg font-bold text-kape-900">
+                Your menu is empty
+              </p>
+              <p className="text-sm text-kape-700 mt-1">
+                Add your first dish so students can start ordering.
+              </p>
+            </div>
+          )}
+
+          <ul className="mt-6 space-y-3">
+            {items.map((item) => {
+              const busy = busyId === item.item_id;
+              const draft = stockDraft[item.item_id];
+              const stockValue = draft ?? String(item.stock_qty);
+              const stockChanged =
+                draft !== undefined && draft !== String(item.stock_qty);
+              const isEditing = editingId === item.item_id;
+              const soldOut = item.is_sold_out || item.stock_qty === 0;
+              const low = !soldOut && item.stock_qty > 0 && item.stock_qty <= 3;
+
+              return (
+                <li
+                  key={item.item_id}
+                  className="bg-white rounded-card border border-rice-200 p-4 sm:p-5"
+                >
+                  {isEditing ? (
+                    <div className="grid gap-4 sm:grid-cols-3">
+                      <Field
+                        id={`edit-name-${item.item_id}`}
+                        label="Name"
+                        value={editForm.name}
+                        onChange={(e) =>
+                          setEditForm({ ...editForm, name: e.target.value })
+                        }
                       />
-                      <div className="min-w-0 flex-1">
-                        <div className="flex items-start justify-between gap-2">
-                          <h2
-                            className={`font-display text-lg font-bold leading-tight truncate ${
-                              soldOut ? "text-kape-900/60" : "text-kape-900"
-                            }`}
-                          >
-                            {item.name}
-                          </h2>
-                          <StatusBadge item={item} />
-                        </div>
-                        <p className="text-sm text-kape-700 mt-0.5">
-                          {item.category || "Uncategorised"}
-                          <span className="mx-1.5 text-kape-700/40">/</span>
-                          <span className="tabular font-semibold text-kape-900">
-                            {peso(item.price)}
-                          </span>
-                        </p>
+                      <Field
+                        id={`edit-category-${item.item_id}`}
+                        label="Category"
+                        value={editForm.category}
+                        onChange={(e) =>
+                          setEditForm({ ...editForm, category: e.target.value })
+                        }
+                      />
+                      <Field
+                        id={`edit-price-${item.item_id}`}
+                        label="Price (₱)"
+                        type="number"
+                        inputMode="decimal"
+                        min="0"
+                        step="0.01"
+                        value={editForm.price}
+                        onChange={(e) =>
+                          setEditForm({ ...editForm, price: e.target.value })
+                        }
+                      />
+                      <Field
+                        id={`edit-photo-${item.item_id}`}
+                        label="Photo link (optional)"
+                        className="sm:col-span-3"
+                        type="url"
+                        value={editForm.image_url}
+                        onChange={(e) =>
+                          setEditForm({
+                            ...editForm,
+                            image_url: e.target.value,
+                          })
+                        }
+                        placeholder="https://… leave empty to remove the photo"
+                      />
+                      <div className="sm:col-span-3 flex gap-2">
                         <button
                           type="button"
-                          onClick={() => startEdit(item)}
-                          className="mt-1 text-sm font-semibold text-ube-700 hover:text-ube-900 hover:underline underline-offset-2 rounded"
+                          onClick={() => saveEdit(item)}
+                          disabled={busy}
+                          className="bg-calamansi-500 hover:bg-calamansi-600 disabled:opacity-50 text-kape-900 text-sm font-semibold rounded-card px-5 py-2.5 transition-colors"
                         >
-                          Edit details
+                          {busy ? "Saving…" : "Save changes"}
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setEditingId(null)}
+                          className="text-sm font-semibold text-kape-900 bg-white border border-rice-200 hover:bg-rice-50 rounded-card px-5 py-2.5"
+                        >
+                          Cancel
                         </button>
                       </div>
                     </div>
-
-                    <div className="mt-4 pt-4 border-t border-dashed border-rice-200 flex flex-col sm:flex-row sm:items-center gap-3">
-                      <div className="flex items-center gap-3 flex-wrap">
-                        <span className="text-sm font-semibold text-kape-900">
-                          Stock
-                        </span>
-                        <div className="flex items-center">
+                  ) : (
+                    <>
+                      <div className="flex items-start gap-3">
+                        <ItemThumb
+                          src={item.image_url}
+                          name={item.name}
+                          muted={soldOut}
+                        />
+                        <div className="min-w-0 flex-1">
+                          <div className="flex items-start justify-between gap-2">
+                            <h2
+                              className={`font-display text-lg font-bold leading-tight truncate ${
+                                soldOut ? "text-kape-900/60" : "text-kape-900"
+                              }`}
+                            >
+                              {item.name}
+                            </h2>
+                            <StatusBadge item={item} />
+                          </div>
+                          <p className="text-sm text-kape-700 mt-0.5">
+                            {item.category || "Uncategorised"}
+                            <span className="mx-1.5 text-kape-700/40">/</span>
+                            <span className="tabular font-semibold text-kape-900">
+                              {peso(item.price)}
+                            </span>
+                          </p>
                           <button
                             type="button"
-                            onClick={() => bumpStock(item, -1)}
-                            disabled={busy}
-                            aria-label={`One less ${item.name}`}
-                            className="h-11 w-11 rounded-l-card border border-rice-200 bg-white text-lg font-bold text-kape-900 hover:bg-rice-100 disabled:opacity-40"
+                            onClick={() => startEdit(item)}
+                            className="mt-1 text-sm font-semibold text-ube-700 hover:text-ube-900 hover:underline underline-offset-2 rounded"
                           >
-                            −
-                          </button>
-                          <input
-                            type="number"
-                            inputMode="numeric"
-                            min="0"
-                            step="1"
-                            aria-label={`${item.name} stock`}
-                            value={stockValue}
-                            onChange={(e) =>
-                              setStockDraft({
-                                ...stockDraft,
-                                [item.item_id]: e.target.value,
-                              })
-                            }
-                            onKeyDown={(e) => {
-                              if (e.key === "Enter" && stockChanged)
-                                saveStock(item);
-                            }}
-                            className={`h-11 w-16 border-y border-rice-200 bg-rice-50 text-center text-base font-semibold text-kape-900 tabular focus:bg-white ${noSpinner}`}
-                          />
-                          <button
-                            type="button"
-                            onClick={() => bumpStock(item, 1)}
-                            disabled={busy}
-                            aria-label={`One more ${item.name}`}
-                            className="h-11 w-11 rounded-r-card border border-rice-200 bg-white text-lg font-bold text-kape-900 hover:bg-rice-100 disabled:opacity-40"
-                          >
-                            +
+                            Edit details
                           </button>
                         </div>
+                      </div>
 
-                        {stockChanged && (
-                          <button
-                            type="button"
-                            onClick={() => saveStock(item)}
-                            disabled={busy}
-                            className="bg-calamansi-500 hover:bg-calamansi-600 disabled:opacity-50 text-kape-900 text-sm font-semibold rounded-card px-4 py-2.5 transition-colors"
-                          >
-                            {busy ? "Saving…" : "Save stock"}
-                          </button>
-                        )}
-
-                        {!stockChanged && low && (
-                          <span className="text-xs font-semibold text-calamansi-600">
-                            Running low
+                      <div className="mt-4 pt-4 border-t border-dashed border-rice-200 flex flex-col sm:flex-row sm:items-center gap-3">
+                        <div className="flex items-center gap-3 flex-wrap">
+                          <span className="text-sm font-semibold text-kape-900">
+                            Stock
                           </span>
-                        )}
-                      </div>
+                          <div className="flex items-center">
+                            <button
+                              type="button"
+                              onClick={() => bumpStock(item, -1)}
+                              disabled={busy}
+                              aria-label={`One less ${item.name}`}
+                              className="h-11 w-11 rounded-l-card border border-rice-200 bg-white text-lg font-bold text-kape-900 hover:bg-rice-100 disabled:opacity-40"
+                            >
+                              −
+                            </button>
+                            <input
+                              type="number"
+                              inputMode="numeric"
+                              min="0"
+                              step="1"
+                              aria-label={`${item.name} stock`}
+                              value={stockValue}
+                              onChange={(e) =>
+                                setStockDraft({
+                                  ...stockDraft,
+                                  [item.item_id]: e.target.value,
+                                })
+                              }
+                              onKeyDown={(e) => {
+                                if (e.key === "Enter" && stockChanged)
+                                  saveStock(item);
+                              }}
+                              className={`h-11 w-16 border-y border-rice-200 bg-rice-50 text-center text-base font-semibold text-kape-900 tabular focus:bg-white ${noSpinner}`}
+                            />
+                            <button
+                              type="button"
+                              onClick={() => bumpStock(item, 1)}
+                              disabled={busy}
+                              aria-label={`One more ${item.name}`}
+                              className="h-11 w-11 rounded-r-card border border-rice-200 bg-white text-lg font-bold text-kape-900 hover:bg-rice-100 disabled:opacity-40"
+                            >
+                              +
+                            </button>
+                          </div>
 
-                      <div className="sm:ml-auto">
-                        {item.is_sold_out ? (
-                          <button
-                            type="button"
-                            onClick={() => setSoldOut(item, false)}
-                            disabled={busy || item.stock_qty === 0}
-                            title={
-                              item.stock_qty === 0
-                                ? "Add stock first"
-                                : "Make this item orderable again"
-                            }
-                            className="w-full sm:w-auto text-sm font-semibold text-dahon-700 bg-white border border-dahon-100 hover:bg-dahon-50 disabled:opacity-40 disabled:hover:bg-white rounded-card px-4 py-2.5 transition-colors"
-                          >
-                            {item.stock_qty === 0
-                              ? "Add stock to reopen"
-                              : "Mark available"}
-                          </button>
-                        ) : (
-                          <button
-                            type="button"
-                            onClick={() => setSoldOut(item, true)}
-                            disabled={busy}
-                            className="w-full sm:w-auto text-sm font-semibold text-sili-700 bg-white border border-sili-100 hover:bg-sili-50 disabled:opacity-40 rounded-card px-4 py-2.5 transition-colors"
-                          >
-                            Mark sold out
-                          </button>
-                        )}
+                          {stockChanged && (
+                            <button
+                              type="button"
+                              onClick={() => saveStock(item)}
+                              disabled={busy}
+                              className="bg-calamansi-500 hover:bg-calamansi-600 disabled:opacity-50 text-kape-900 text-sm font-semibold rounded-card px-4 py-2.5 transition-colors"
+                            >
+                              {busy ? "Saving…" : "Save stock"}
+                            </button>
+                          )}
+
+                          {!stockChanged && low && (
+                            <span className="text-xs font-semibold text-calamansi-600">
+                              Running low
+                            </span>
+                          )}
+                        </div>
+
+                        <div className="sm:ml-auto">
+                          {item.is_sold_out ? (
+                            <button
+                              type="button"
+                              onClick={() => setSoldOut(item, false)}
+                              disabled={busy || item.stock_qty === 0}
+                              title={
+                                item.stock_qty === 0
+                                  ? "Add stock first"
+                                  : "Make this item orderable again"
+                              }
+                              className="w-full sm:w-auto text-sm font-semibold text-dahon-700 bg-white border border-dahon-100 hover:bg-dahon-50 disabled:opacity-40 disabled:hover:bg-white rounded-card px-4 py-2.5 transition-colors"
+                            >
+                              {item.stock_qty === 0
+                                ? "Add stock to reopen"
+                                : "Mark available"}
+                            </button>
+                          ) : (
+                            <button
+                              type="button"
+                              onClick={() => setSoldOut(item, true)}
+                              disabled={busy}
+                              className="w-full sm:w-auto text-sm font-semibold text-sili-700 bg-white border border-sili-100 hover:bg-sili-50 disabled:opacity-40 rounded-card px-4 py-2.5 transition-colors"
+                            >
+                              Mark sold out
+                            </button>
+                          )}
+                        </div>
                       </div>
-                    </div>
-                  </>
-                )}
-              </li>
-            );
-          })}
-        </ul>
+                    </>
+                  )}
+                </li>
+              );
+            })}
+          </ul>
+        </div>
       </main>
 
       {(error || notice) && (
